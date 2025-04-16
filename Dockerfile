@@ -1,6 +1,6 @@
 FROM python:3.9-slim
 
-# نصب وابستگی‌های سیستمی موردنیاز
+# نصب پکیج‌های سیستمی مورد نیاز
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     imagemagick \
@@ -15,9 +15,13 @@ WORKDIR /app
 # کپی فایل‌های پروژه
 COPY . /app
 
-# نصب وابستگی‌های پایتون
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
+# نمایش محتویات پوشه برای دیباگ
+RUN ls -l /app
+
+# نصب پکیج‌ها + نمایش وضعیت moviepy
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip show moviepy || (echo "moviepy نصب نشد!" && exit 1)
 
 # اجرای برنامه
 CMD ["python", "media_bot_project.py"]
