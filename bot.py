@@ -17,9 +17,9 @@ from pyrogram import Client
 from aiohttp import web
 
 # مقادیر زیر را با مقادیر واقعی جایگزین کن یا از ENV استفاده کن
-API_ID = int(os.environ.get("API_ID", "123456"))
-API_HASH = os.environ.get("API_HASH", "your_api_hash")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "your_bot_token")
+API_ID = int(os.environ.get("API_ID", "3335796"))
+API_HASH = os.environ.get("API_HASH", "138b992a0e672e8346d8439c3f42ea78")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "5088657122:AAHdusGDuWfBpSDWkcX-qU1_fgzij4w8Lzk")
 
 app = Client(
     "my_bot",
