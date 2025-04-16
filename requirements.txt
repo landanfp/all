@@ -6,3 +6,5 @@ pillow
 gtts
 pydub
 zipfile36
+aiofiles
+aiohttp
