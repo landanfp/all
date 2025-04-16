@@ -9,33 +9,46 @@ from pyrogram.types import InputMediaVideo
 from aiohttp import web
 import asyncio """
 #import ffmpeg
-api_id = "3335796"  # جایگزین کنید با api_id خود
-api_hash = "138b992a0e672e8346d8439c3f42ea78"  # جایگزین کنید با api_hash خود
-bot_token = "7136875110:AAFzyr2i2FbRrmst1sklkJPN7Yz2rXJvSew"  # جایگزین کنید با bot_token خود
-
-app = Client("media_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 
-# مسیر ذخیره فایل‌ها در سرور
-UPLOAD_FOLDER = "uploads/"
+import os
+import asyncio
+from pyrogram import Client
+from aiohttp import web
 
-# اطمینان از وجود پوشه ذخیره‌سازی
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# مقادیر زیر را با مقادیر واقعی جایگزین کن یا از ENV استفاده کن
+API_ID = int(os.environ.get("API_ID", "123456"))
+API_HASH = os.environ.get("API_HASH", "your_api_hash")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "your_bot_token")
 
+app = Client(
+    "my_bot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN,
+    plugins=dict(root="plugins")
+)
+
+# health check server
 async def health_check(request):
     return web.Response(text="OK")
 
 async def start_fake_server():
-    app = web.Application()
-    app.router.add_get("/", health_check)
-    runner = web.AppRunner(app)
+    aio_app = web.Application()
+    aio_app.router.add_get("/", health_check)
+    runner = web.AppRunner(aio_app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", 8000)
     await site.start()
 
-loop = asyncio.get_event_loop()
-loop.create_task(start_fake_server())
+# اجرای ربات و سرور
+async def main():
+    await start_fake_server()
+    await app.start()
+    print("Bot is running. Press Ctrl+C to stop.")
+    await idle()
+    await app.stop()
 
-# شروع ربات
-app.run()
+if __name__ == "__main__":
+    from pyrogram import idle
+    asyncio.run(main())
