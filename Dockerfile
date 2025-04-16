@@ -1,22 +1,6 @@
-خیلی خب، حالا که مطمئنیم requirements.txt درسته و moviepy توشه، ولی هنوز ارور ModuleNotFoundError میاد، یعنی:
-
-کانتینر اصلاً moviepy رو نصب نمی‌کنه یا به دلایلی درست نصب نمی‌شه.
-
-
----
-
-راه‌حل سریع: نصب مستقیم داخل Dockerfile (بدون reliance به requirements.txt)
-
-بجای اینکه فقط به requirements.txt اعتماد کنیم، بیا مستقیم توی Dockerfile نصب کنیم:
-
-
----
-
-Dockerfile پیشنهادی (با نصب مستقیم moviepy):
-
 FROM python:3.9-slim
 
-# نصب پکیج‌های مورد نیاز سیستم
+# نصب ابزارهای مورد نیاز
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     imagemagick \
@@ -25,35 +9,22 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     && rm -rf /var/lib/apt/lists/*
 
-# تنظیم پوشه کاری
+# تنظیم مسیر کاری
 WORKDIR /app
 
-# کپی پروژه
+# کپی پروژه داخل کانتینر
 COPY . /app
 
-# نصب کتابخانه‌ها
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir moviepy && \
-    pip install --no-cache-dir -r requirements.txt
+# نصب MoviePy و پکیج‌های مورد نیازش
+RUN pip install --upgrade pip
+RUN pip install moviepy==1.0.3 imageio-ffmpeg==0.4.5
 
-# دیباگ: نمایش پکیج‌های نصب‌شده
-RUN pip freeze
+# نصب سایر وابستگی‌ها
+RUN pip install --no-cache-dir -r requirements.txt
 
-# اجرای پروژه
+# تست نصب moviepy (اختیاری ولی مفیده برای لاگ)
+RUN python -c "from moviepy.editor import VideoFileClip; print('MoviePy installed successfully.')"
+
+# اجرای برنامه اصلی
 CMD ["python", "media_bot_project.py"]
-
-> اینجا ابتدا moviepy رو به‌صورت جدا نصب می‌کنیم تا مطمئن شیم نصب شده، بعد باقی پکیج‌ها از requirements.txt میاد.
-
-
-
-
----
-
-اگه هنوز جواب نداد:
-
-محتوای فایل requirements.txt رو بفرست. ممکنه یه مشکل در ترتیب یا ناسازگاری ورژن‌ها باشه.
-
-یا اگه خواستی پروژه رو تو GitHub بذار (یا zip بده)، من برات Dockerfile و همه چیز رو کامل و تست‌شده آماده می‌کنم.
-
-بگی می‌خوای اینکارو انجام بدیم؟
 
