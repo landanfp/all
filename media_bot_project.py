@@ -1,7 +1,7 @@
 
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
+#from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
 from PIL import Image
 import os
 import shutil
