@@ -6,6 +6,8 @@ from PIL import Image
 import os
 import shutil
 from pyrogram.types import InputMediaVideo
+from aiohttp import web
+import asyncio
 #import ffmpeg
 api_id = "3335796"  # جایگزین کنید با api_id خود
 api_hash = "138b992a0e672e8346d8439c3f42ea78"  # جایگزین کنید با api_hash خود
@@ -211,6 +213,24 @@ async def handle_audio(client, message):
     # انجام عملیات مربوط به صدا (برش، ادغام، تبدیل صدا به متن و ...)
     # پس از انجام عملیات، فایل صوتی حذف می‌شود
     remove_file(audio_file_path)
+#----------------------------_--
+
+#from aiohttp import web
+#import asyncio
+
+async def health_check(request):
+    return web.Response(text="OK")
+
+async def start_fake_server():
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 8000)
+    await site.start()
+
+loop = asyncio.get_event_loop()
+loop.create_task(start_fake_server())
 
 # شروع ربات
 app.run()
