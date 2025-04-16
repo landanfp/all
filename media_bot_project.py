@@ -7,7 +7,12 @@ import os
 import shutil
 from pyrogram.types import InputMediaVideo
 
-app = Client("media_bot")
+api_id = "3335796"  # جایگزین کنید با api_id خود
+api_hash = "138b992a0e672e8346d8439c3f42ea78"  # جایگزین کنید با api_hash خود
+bot_token = "7136875110:AAFzyr2i2FbRrmst1sklkJPN7Yz2rXJvSew"  # جایگزین کنید با bot_token خود
+
+app = Client("media_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
+
 
 # مسیر ذخیره فایل‌ها در سرور
 UPLOAD_FOLDER = "uploads/"
