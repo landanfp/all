@@ -1,0 +1,7 @@
+
+pyrogram
+moviepy
+pillow
+gtts
+pydub
+zipfile36
