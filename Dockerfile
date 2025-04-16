@@ -1,19 +1,23 @@
-# استفاده از پایتون نسخه 3.9 به عنوان پایه
 FROM python:3.9-slim
 
-# نصب ffmpeg
+# نصب وابستگی‌های سیستمی موردنیاز
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    imagemagick \
+    libx11-6 \
+    libxext6 \
+    libsm6 \
     && rm -rf /var/lib/apt/lists/*
 
 # تنظیم پوشه کاری
 WORKDIR /app
 
-# کپی کردن تمام فایل‌ها به داخل کانتینر
+# کپی فایل‌های پروژه
 COPY . /app
 
-# نصب وابستگی‌ها
+# نصب وابستگی‌های پایتون
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# اجرای فایل اصلی پروژه
+# اجرای برنامه
 CMD ["python", "media_bot_project.py"]
