@@ -16,10 +16,9 @@ import asyncio
 from pyrogram import Client
 from aiohttp import web
 
-# مقادیر زیر را با مقادیر واقعی جایگزین کن یا از ENV استفاده کن
 API_ID = int(os.environ.get("API_ID", "3335796"))
 API_HASH = os.environ.get("API_HASH", "138b992a0e672e8346d8439c3f42ea78")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "5088657122:AAHdusGDuWfBpSDWkcX-qU1_fgzij4w8Lzk")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "توکن واقعی رو بذار اینجا")
 
 app = Client(
     "my_bot",
@@ -29,10 +28,11 @@ app = Client(
     plugins=dict(root="plugins")
 )
 
-# health check server
+# health check route
 async def health_check(request):
     return web.Response(text="OK")
 
+# start aiohttp server
 async def start_fake_server():
     aio_app = web.Application()
     aio_app.router.add_get("/", health_check)
@@ -41,14 +41,11 @@ async def start_fake_server():
     site = web.TCPSite(runner, "0.0.0.0", 8000)
     await site.start()
 
-# اجرای ربات و سرور
-async def main():
+# اجرای همزمان ربات و سرور
+@app.on_start()
+async def on_start(client):
     await start_fake_server()
-    await app.start()
-    print("Bot is running. Press Ctrl+C to stop.")
-    await idle()
-    await app.stop()
 
+# شروع ربات (بدون asyncio.run!)
 if __name__ == "__main__":
-    from pyrogram import idle
-    asyncio.run(main())
+    app.run()
