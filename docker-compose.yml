@@ -8,4 +8,4 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - .:/app
-    command: python media_bot_project.py
+    command: python bot.py
