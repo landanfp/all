@@ -124,19 +124,19 @@ def take_screenshot_from_video(video_file, time=1, output_file="screenshot.jpg")
 # پیام خوشامدگویی
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("تبدیل صدا به متن", callback_data="audio_to_text"),
-          InlineKeyboardButton("تبدیل متن به صدا", callback_data="text_to_audio"),
-          InlineKeyboardButton("برش صدا", callback_data="cut_audio"),
-          InlineKeyboardButton("ادغام صدا", callback_data="merge_audio"),
-          InlineKeyboardButton("تبدیل ویدیو به صدا", callback_data="video_to_audio"),
-          InlineKeyboardButton("برش ویدیو", callback_data="cut_video"),
-          InlineKeyboardButton("زیپ کردن فایل‌ها", callback_data="zip_files"),
-          InlineKeyboardButton("افزودن زیرنویس به ویدیو", callback_data="add_subtitles"),
-          InlineKeyboardButton("ادغام ویدیوها", callback_data="merge_videos"),
-          InlineKeyboardButton("افزودن صدا به ویدیو", callback_data="add_audio_to_video"),
-          InlineKeyboardButton("گرفتن اسکرین‌شات از ویدیو", callback_data="take_screenshot")]]
-    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("تبدیل صدا به ویس", callback_data="audio_to_speech"),
+         InlineKeyboardButton("تبدیل ویس به صدا", callback_data="speech_to_audio")],
+        [InlineKeyboardButton("برش صدا", callback_data="audio_cut"),
+         InlineKeyboardButton("اذغام صدا", callback_data="audio_merge")],
+        [InlineKeyboardButton("تبدیل ویدیو به صدا", callback_data="video_to_audio"),
+         InlineKeyboardButton("زیپ کردن فایل‌ها", callback_data="zip_files")],
+        [InlineKeyboardButton("برش ویدیو", callback_data="video_cut"),
+         InlineKeyboardButton("افزودن زیرنویس به ویدیو", callback_data="add_subtitles")],
+        [InlineKeyboardButton("اذغام ویدیوها", callback_data="merge_videos"),
+         InlineKeyboardButton("افزودن صدا به ویدیو", callback_data="add_audio_to_video")],
+        [InlineKeyboardButton("گرفتن اسکرین شات", callback_data="take_screenshot")]
+    ])
     await message.reply("به ربات خوش آمدید! انتخاب کنید که می‌خواهید چه کاری انجام دهید:", reply_markup=keyboard)
 
 # مدیریت دکمه‌ها
