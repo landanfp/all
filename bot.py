@@ -1,4 +1,4 @@
-"""
+
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
@@ -7,14 +7,14 @@ import os
 import shutil
 from pyrogram.types import InputMediaVideo
 from aiohttp import web
-import asyncio """
+import asyncio 
 #import ffmpeg
 
 
-import os
-import asyncio
-from pyrogram import Client
-from aiohttp import web
+#import os
+#import asyncio
+#from pyrogram import Client
+#from aiohttp import web
 
 API_ID = int(os.environ.get("API_ID", "3335796"))
 API_HASH = os.environ.get("API_HASH", "138b992a0e672e8346d8439c3f42ea78")
