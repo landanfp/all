@@ -1,0 +1,11 @@
+version: '3'
+services:
+  media_bot:
+    build: .
+    container_name: media_bot_container
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - .:/app
+    command: python media_bot_project.py
