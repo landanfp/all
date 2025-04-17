@@ -17,10 +17,11 @@ async def progress_bar(current, total, message, start_time, description="در ح
     speed = current / elapsed if elapsed > 0 else 0
     eta = (total - current) / speed if speed > 0 else 0
 
-    try:
-        percentage = current * 100 / total
-    except ZeroDivisionError:
+    # تقسیم بر صفر جلوگیری شود
+    if total == 0:
         percentage = 0
+    else:
+        percentage = current * 100 / total
 
     bar_length = 20
     filled_length = int(bar_length * current // total) if total > 0 else 0
@@ -40,7 +41,9 @@ async def progress_bar(current, total, message, start_time, description="در ح
     )
 
     try:
-        await message.edit_text(text)
+        # ویرایش پیام فقط در صورت تغییر محتوا
+        if message.text != text:
+            await message.edit_text(text)
     except:
         pass
 
