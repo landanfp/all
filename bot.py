@@ -2,7 +2,6 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 #from plugins import video_cut, audio_cut  
 
-گ
 app = Client(
     "media_cutter_bot",
     api_id=3335796,  # جایگزین کن با API ID واقعی
