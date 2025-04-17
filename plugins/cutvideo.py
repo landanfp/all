@@ -2,7 +2,6 @@ from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import timedelta
 import os
-from . import start
 from moviepy.editor import VideoFileClip
 
 user_trim_state = {}
