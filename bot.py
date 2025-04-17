@@ -7,6 +7,7 @@ import time
 api_id = '3335796'  # جایگزین با api_id شما
 api_hash = '138b992a0e672e8346d8439c3f42ea78'  # جایگزین با api_hash شما
 bot_token = '7136875110:AAFzyr2i2FbRrmst1sklkJPN7Yz2rXJvSew'  # جایگزین با bot_token شما
+# جایگزین با bot_token واقعی شما
 
 app = Client("watermark_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
@@ -28,7 +29,11 @@ async def add_watermark(client, message):
         'ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'default=noprint_wrappers=1', download_path
     ]
     probe_result = subprocess.run(ffprobe_command, capture_output=True, text=True)
-    width, height = map(int, probe_result.stdout.split('\n')[:2])
+
+    # استخراج width و height از خروجی
+    result_lines = probe_result.stdout.split('\n')
+    width = int(result_lines[0].split('=')[1])  # استخراج عدد width
+    height = int(result_lines[1].split('=')[1])  # استخراج عدد height
 
     # تعیین اندازه فونت بر اساس 50% از عرض ویدیو
     font_size = int(width * 0.1)  # سایز فونت معادل 10% از عرض ویدیو
