@@ -1,7 +1,10 @@
+from pyrogram import Client, filters
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from fastapi import FastAPI
 import threading
 import uvicorn
 
+# Pyrogram bot setup
 app = Client(
     "media_cutter_bot",
     api_id=3335796,
@@ -10,7 +13,7 @@ app = Client(
     plugins=dict(root="plugins")
 )
 
-# FastAPI app
+# FastAPI app for health check
 web_app = FastAPI()
 
 @web_app.get("/")
@@ -22,9 +25,5 @@ def run_web():
 
 if __name__ == "__main__":
     print("Bot is running...")
-
-    # اجرای وب‌سرور روی ترد جدا
     threading.Thread(target=run_web).start()
-    
-    # اجرای بات تلگرام
     app.run()
