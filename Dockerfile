@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # تنظیم فرمان اجرا
-CMD ["python", "bot.py"]
+CMD ["python3", "bot.py"]
