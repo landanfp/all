@@ -1,50 +1,81 @@
+import os
+from moviepy.editor import VideoFileClip
+from pyrogram import Client, InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.handlers import MessageHandler, CallbackQueryHandler
+from plugins.database import download_file, upload_file
 
-from pyrogram import Client, filters
-from pyrogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
-from plugins.database import download_and_trim_upload
+async def video_cut(client, message):
+    # ارسال پیام درخواست ویدیو
+    await message.reply("لطفاً ویدیو مورد نظر را ارسال کنید.")
 
-user_video_state = {}
+async def handle_video_cut(client, message):
+    # بررسی اینکه آیا پیام شامل ویدیو است یا نه
+    if message.video:
+        video_file = message.video.file_id
+        # دانلود ویدیو
+        file_path = await download_file(client, video_file)
+        
+        # ارسال پیام برای دریافت زمان شروع
+        await message.reply("لطفاً زمان شروع را وارد کنید (فرمت: hh:mm:ss).")
 
-@Client.on_callback_query(filters.regex("cut_video"))
-async def handle_video_cut(client: Client, callback_query: CallbackQuery):
-    await callback_query.answer()
-    await callback_query.message.reply("لطفاً ویدیو خود را ارسال کنید.")
-    user_video_state[callback_query.from_user.id] = {}
+        # زمان شروع و پایان
+        start_time = None
+        end_time = None
 
-@Client.on_message(filters.video & filters.private)
-async def receive_video(client: Client, message: Message):
-    user_id = message.from_user.id
-    file_id = message.video.file_id
-    user_video_state[user_id] = {"file_id": file_id}
-    await message.reply("تایم شروع را وارد کنید (hh:mm:ss):")
+        def set_start_time(client, message):
+            nonlocal start_time
+            start_time = message.text
+            # درخواست زمان پایان
+            await message.reply("لطفاً زمان پایان را وارد کنید (فرمت: hh:mm:ss).")
 
-@Client.on_message(filters.text & filters.private)
-async def receive_video_times(client: Client, message: Message):
-    user_id = message.from_user.id
-    state = user_video_state.get(user_id)
+        def set_end_time(client, message):
+            nonlocal end_time
+            end_time = message.text
+            # بروزرسانی پیام
+            await message.reply(f"تایم شروع: {start_time}\nتایم پایان: {end_time}")
+            # دکمه شروع را اضافه کنید
+            await message.reply(
+                "برای شروع برش، دکمه 'شروع' را بزنید.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("شروع", callback_data="start_cut")]
+                ])
+            )
 
-    if not state:
-        return
+        def cut_video(client, callback_query):
+            if start_time and end_time:
+                # تبدیل زمان‌ها به ثانیه
+                start_seconds = convert_to_seconds(start_time)
+                end_seconds = convert_to_seconds(end_time)
 
-    if "start" not in state:
-        state["start"] = message.text
-        await message.reply("تایم پایان را وارد کنید (hh:mm:ss):")
-    elif "end" not in state:
-        state["end"] = message.text
-        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("شروع", callback_data="start_trim")]])
-        await message.reply(f"تایم شروع: {state['start']}
-تایم پایان: {state['end']}", reply_markup=keyboard)
+                # برش ویدیو
+                video = VideoFileClip(file_path)
+                video = video.subclip(start_seconds, end_seconds)
 
-@Client.on_callback_query(filters.regex("start_trim"))
-async def start_trimming(client: Client, callback_query: CallbackQuery):
-    await callback_query.answer("در حال پردازش...")
-    user_id = callback_query.from_user.id
-    state = user_video_state.get(user_id)
+                # ذخیره ویدیو جدید
+                output_path = f"output_{message.video.file_id}.mp4"
+                video.write_videofile(output_path, codec="libx264")
 
-    if not state:
-        await callback_query.message.edit_text("هیچ فایل ویدیویی پیدا نشد.")
-        return
+                # ارسال ویدیو برش داده شده
+                await client.send_video(message.chat.id, output_path)
 
-    await callback_query.message.edit_text("در حال دانلود و برش ویدیو...")
-    await download_and_trim_upload(client, callback_query.message, state["file_id"], state["start"], state["end"])
-    del user_video_state[user_id]
+                # حذف فایل‌ها بعد از ارسال
+                os.remove(file_path)
+                os.remove(output_path)
+            else:
+                await message.reply("لطفاً ابتدا زمان شروع و پایان را وارد کنید.")
+
+    else:
+        await message.reply("این پیام حاوی ویدیو نیست.")
+
+# تبدیل زمان به ثانیه
+def convert_to_seconds(time_str):
+    hours, minutes, seconds = map(int, time_str.split(":"))
+    return hours * 3600 + minutes * 60 + seconds
+
+# هندلرهای پیام‌ها و دکمه‌های پاسخ
+start_handler = MessageHandler(video_cut, filters.command("start"))
+video_cut_handler = CallbackQueryHandler(handle_video_cut, filters.regex("start_cut"))
+
+# اضافه کردن هندلرها به ربات
+app.add_handler(start_handler)
+app.add_handler(video_cut_handler)
