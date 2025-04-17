@@ -1,4 +1,3 @@
-
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from plugins.database import download_and_trim_audio_upload
@@ -32,8 +31,7 @@ async def receive_audio_times(client: Client, message: Message):
     elif "end" not in state:
         state["end"] = message.text
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("شروع برش", callback_data="start_audio_trim")]])
-        await message.reply(f"تایم شروع: {state['start']}
-تایم پایان: {state['end']}", reply_markup=keyboard)
+        await message.reply(f"تایم شروع: {state['start']}\nتایم پایان: {state['end']}", reply_markup=keyboard)
 
 @Client.on_callback_query(filters.regex("start_audio_trim"))
 async def start_audio_trimming(client: Client, callback_query: CallbackQuery):
@@ -46,5 +44,6 @@ async def start_audio_trimming(client: Client, callback_query: CallbackQuery):
         return
 
     await callback_query.message.edit_text("در حال دانلود و برش فایل صوتی...")
+    # فراخوانی تابع دانلود و برش صوت
     await download_and_trim_audio_upload(client, callback_query.message, state["file_id"], state["start"], state["end"])
     del user_audio_state[user_id]
