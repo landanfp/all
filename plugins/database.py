@@ -1,4 +1,3 @@
-
 import os
 import time
 from moviepy.video.io.VideoFileClip import VideoFileClip
@@ -26,16 +25,11 @@ async def progress_bar(current, total, message, start_time, description="در ح
     speed_mb = speed / (1024 * 1024)
 
     text = (
-        f"{description}...
-"
-        f"[{bar}] {percentage:.2f}%
-"
-        f"حجم انجام شده: {current_mb:.2f} MB
-"
-        f"حجم کل فایل: {total_mb:.2f} MB
-"
-        f"سرعت: {speed_mb:.2f} MB/s
-"
+        f"{description}...\n"
+        f"[{bar}] {percentage:.2f}%\n"
+        f"حجم انجام شده: {current_mb:.2f} MB\n"
+        f"حجم کل فایل: {total_mb:.2f} MB\n"
+        f"سرعت: {speed_mb:.2f} MB/s\n"
         f"تایم باقی مانده: {round(eta)} ثانیه"
     )
 
