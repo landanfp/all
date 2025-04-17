@@ -1,7 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
+from datetime import timedelta
 import os
-import asyncio
 from moviepy.editor import VideoFileClip
 
 user_trim_state = {}
@@ -33,7 +33,7 @@ async def handle_video(client, message: Message):
     user_trim_state[user_id]["video_msg_id"] = video_msg_id
     user_trim_state[user_id]["video_duration"] = duration
 
-    readable_time = str(asyncio.timedelta(seconds=duration))
+    readable_time = str(timedelta(seconds=duration))
 
     text = (
         f"حله بریم برای برش ویدیو...\n"
@@ -69,26 +69,26 @@ async def handle_time_inputs(client, message: Message):
         return
 
     if state["start_time"] is None:
-        # set start time
         state["start_time"] = message.text
         await client.delete_messages(message.chat.id, state["ask_start_msg_id"])
 
         updated = (
             f"حله بریم برای برش ویدیو...\n"
-            f"تایم ویدیو : {str(asyncio.timedelta(seconds=state['video_duration']))}\n"
+            f"تایم ویدیو : {str(timedelta(seconds=state['video_duration']))}\n"
             f"تایم شروع : {state['start_time']}\n"
             f"تایم پایان : {{تنظیم نشده}}"
         )
         await client.edit_message_text(message.chat.id, state["info_msg_id"], updated)
         ask_end = await message.reply("لطفاً تایم پایان را به فرمت hh:mm:ss ارسال کنید:")
         state["ask_end_msg_id"] = ask_end.id
+
     elif state["end_time"] is None:
         state["end_time"] = message.text
         await client.delete_messages(message.chat.id, state["ask_end_msg_id"])
 
         updated = (
             f"حله بریم برای برش ویدیو...\n"
-            f"تایم ویدیو : {str(asyncio.timedelta(seconds=state['video_duration']))}\n"
+            f"تایم ویدیو : {str(timedelta(seconds=state['video_duration']))}\n"
             f"تایم شروع : {state['start_time']}\n"
             f"تایم پایان : {state['end_time']}"
         )
