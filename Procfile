@@ -1,1 +1,1 @@
-worker: python media_bot_project.py
+worker: python3 media_bot_project.py
