@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
-from plugins.database import download_and_trim_audio_upload
+#from plugins.database import download_and_trim_audio_upload
+from plugins.database import download_and_trim_upload, download_and_trim_audio_upload
 
 user_audio_state = {}
 
