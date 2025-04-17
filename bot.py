@@ -1,6 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from plugins.cutvid import setup_handlers  # تغییر به cutvid
+from plugins import video_cut, audio_cut  
 
 گ
 app = Client(
