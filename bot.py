@@ -2,6 +2,8 @@ from pyrogram import Client
 from fastapi import FastAPI
 import threading
 import uvicorn
+import start
+from plugins cutvideo
 
 # Pyrogram bot setup
 app = Client(
