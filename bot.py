@@ -4,9 +4,9 @@ import os
 import time
 
 # وارد کردن مقادیر api_id، api_hash و bot_token
-api_id = 'YOUR_API_ID'  # جایگزین با api_id شما
-api_hash = 'YOUR_API_HASH'  # جایگزین با api_hash شما
-bot_token = 'YOUR_BOT_TOKEN'  # جایگزین با bot_token شما
+api_id = '3335796'  # جایگزین با api_id شما
+api_hash = '138b992a0e672e8346d8439c3f42ea78'  # جایگزین با api_hash شما
+bot_token = '7136875110:AAFzyr2i2FbRrmst1sklkJPN7Yz2rXJvSew'  # جایگزین با bot_token شما
 
 app = Client("watermark_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
