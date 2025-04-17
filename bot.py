@@ -1,6 +1,9 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
+from plugins import start
+from plugins.cutvid import setup_handlers  # تغییر به cutvid
+
 # اطلاعات رباتت رو وارد کن
 api_id = "3335796"  # جایگزین کنید با api_id خود
 api_hash = "138b992a0e672e8346d8439c3f42ea78"  # جایگزین کنید با api_hash خود
