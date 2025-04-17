@@ -2,6 +2,11 @@ print(">>> start.py loaded")
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
+@Client.on_message(filters.command("ping") & filters.private)
+async def ping(client, message: Message):
+    await message.reply("pong!")
+
+"""
 @Client.on_message(filters.command("start") & filters.private)
 async def start(client, message: Message):
     keyboard = InlineKeyboardMarkup([
@@ -27,3 +32,4 @@ async def start(client, message: Message):
          InlineKeyboardButton("تبدیل ویدیو به فایل", callback_data="video_to_file")]
     ])
     await message.reply("سلام! لطفاً یک گزینه را انتخاب کنید:", reply_markup=keyboard)
+"""
