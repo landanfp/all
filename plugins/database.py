@@ -47,8 +47,8 @@ async def progress_bar(current, total, message, start_time, description="در ح
         # ویرایش پیام فقط در صورت تغییر محتوا
         if message.text != text:
             await message.edit_text(text)
-    except:
-        pass
+    except Exception as e:
+        print(f"Error editing message: {e}")
 
 async def download_and_trim_upload(client: Client, message: Message, file_id: str, start: str, end: str):
     """دانلود و برش ویدیو با دقت بیشتر در زمان برش."""
@@ -56,6 +56,8 @@ async def download_and_trim_upload(client: Client, message: Message, file_id: st
     output_path = f"downloads/trimmed_{file_id}.mp4"
     os.makedirs("downloads", exist_ok=True)
     start_time = time.time()
+
+    print("Starting video download...")  # برای دیباگ
 
     await client.download_media(
         file_id,
@@ -65,6 +67,7 @@ async def download_and_trim_upload(client: Client, message: Message, file_id: st
     )
 
     try:
+        print("Video download completed, starting trimming...")  # برای دیباگ
         video = VideoFileClip(download_path)
 
         # تبدیل زمان شروع و پایان به ثانیه برای دقت بیشتر
@@ -95,7 +98,8 @@ async def download_and_trim_audio_upload(client: Client, message: Message, file_
     os.makedirs("downloads", exist_ok=True)
     start_time = time.time()
 
-    # اصلاح پروگرس بار
+    print("Starting audio download...")  # برای دیباگ
+
     await client.download_media(
         file_id,
         file_name=download_path,
@@ -104,6 +108,7 @@ async def download_and_trim_audio_upload(client: Client, message: Message, file_
     )
 
     try:
+        print("Audio download completed, starting trimming...")  # برای دیباگ
         audio = AudioSegment.from_file(download_path)
 
         # تبدیل زمان شروع و پایان به میلی‌ثانیه برای دقت بیشتر
@@ -116,7 +121,6 @@ async def download_and_trim_audio_upload(client: Client, message: Message, file_
 
         upload_start = time.time()
 
-        # اصلاح پروگرس بار برای آپلود
         await message.reply_audio(
             output_path,
             caption="فایل صوتی برش‌خورده آماده است!",
