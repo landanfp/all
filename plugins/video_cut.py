@@ -1,34 +1,47 @@
 import os
 from moviepy.editor import VideoFileClip
-from pyrogram import Client, InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.handlers import MessageHandler, CallbackQueryHandler
-from plugins.database import download_file, upload_file
+from pyrogram import Client, filters
+from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.handlers import MessageHandler
 
-async def video_cut(client, message):
-    # ارسال پیام درخواست ویدیو
-    await message.reply("لطفاً ویدیو مورد نظر را ارسال کنید.")
+# دانلود فایل
+async def download_file(client: Client, file_id: str) -> str:
+    file_path = f"downloads/{file_id}.mp4"
+    file = await client.download_media(file_id, file_path)
+    return file_path
 
-async def handle_video_cut(client, message):
-    # بررسی اینکه آیا پیام شامل ویدیو است یا نه
+# ارسال پیام شروع
+async def start_message(client, message: Message):
+    await message.reply(
+        "سلام! لطفاً ویدیو خود را ارسال کنید که می‌خواهید آن را برش دهید.",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("برش ویدیو", callback_data="cut_video")]
+        ])
+    )
+
+# برش ویدیو
+async def video_cut(client: Client, message: Message):
     if message.video:
-        video_file = message.video.file_id
         # دانلود ویدیو
+        video_file = message.video.file_id
         file_path = await download_file(client, video_file)
-        
-        # ارسال پیام برای دریافت زمان شروع
+
+        # درخواست زمان شروع
         await message.reply("لطفاً زمان شروع را وارد کنید (فرمت: hh:mm:ss).")
 
-        # زمان شروع و پایان
+        # زمان شروع و پایان به صورت متغیر
         start_time = None
         end_time = None
 
-        def set_start_time(client, message):
+        # تابع برای تنظیم زمان شروع
+        async def set_start_time(client, message):
             nonlocal start_time
             start_time = message.text
             # درخواست زمان پایان
             await message.reply("لطفاً زمان پایان را وارد کنید (فرمت: hh:mm:ss).")
 
-        def set_end_time(client, message):
+        # تابع برای تنظیم زمان پایان
+        async def set_end_time(client, message):
             nonlocal end_time
             end_time = message.text
             # بروزرسانی پیام
@@ -41,7 +54,13 @@ async def handle_video_cut(client, message):
                 ])
             )
 
-        def cut_video(client, callback_query):
+        # تبدیل زمان به ثانیه
+        def convert_to_seconds(time_str):
+            hours, minutes, seconds = map(int, time_str.split(":"))
+            return hours * 3600 + minutes * 60 + seconds
+
+        # برش ویدیو
+        async def cut_video(client, callback_query):
             if start_time and end_time:
                 # تبدیل زمان‌ها به ثانیه
                 start_seconds = convert_to_seconds(start_time)
@@ -63,19 +82,3 @@ async def handle_video_cut(client, message):
                 os.remove(output_path)
             else:
                 await message.reply("لطفاً ابتدا زمان شروع و پایان را وارد کنید.")
-
-    else:
-        await message.reply("این پیام حاوی ویدیو نیست.")
-
-# تبدیل زمان به ثانیه
-def convert_to_seconds(time_str):
-    hours, minutes, seconds = map(int, time_str.split(":"))
-    return hours * 3600 + minutes * 60 + seconds
-
-# هندلرهای پیام‌ها و دکمه‌های پاسخ
-start_handler = MessageHandler(video_cut, filters.command("start"))
-video_cut_handler = CallbackQueryHandler(handle_video_cut, filters.regex("start_cut"))
-
-# اضافه کردن هندلرها به ربات
-app.add_handler(start_handler)
-app.add_handler(video_cut_handler)
