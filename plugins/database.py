@@ -17,6 +17,9 @@ async def progress_bar(current, total, message, start_time, description="در ح
     speed = current / elapsed if elapsed > 0 else 0
     eta = (total - current) / speed if speed > 0 else 0
 
+    # دیباگ کردن مقادیر برای بررسی عملکرد
+    print(f"current: {current}, total: {total}, elapsed: {elapsed}, speed: {speed}, eta: {eta}")  # برای دیباگ
+
     # تقسیم بر صفر جلوگیری شود
     if total == 0:
         percentage = 0
@@ -46,7 +49,6 @@ async def progress_bar(current, total, message, start_time, description="در ح
             await message.edit_text(text)
     except:
         pass
-
 
 async def download_and_trim_upload(client: Client, message: Message, file_id: str, start: str, end: str):
     """دانلود و برش ویدیو با دقت بیشتر در زمان برش."""
@@ -86,7 +88,6 @@ async def download_and_trim_upload(client: Client, message: Message, file_id: st
         if os.path.exists(download_path): os.remove(download_path)
         if os.path.exists(output_path): os.remove(output_path)
 
-
 async def download_and_trim_audio_upload(client: Client, message: Message, file_id: str, start: str, end: str):
     """دانلود و برش فایل صوتی با دقت بیشتر در زمان برش."""
     download_path = f"downloads/{file_id}.mp3"
@@ -94,6 +95,7 @@ async def download_and_trim_audio_upload(client: Client, message: Message, file_
     os.makedirs("downloads", exist_ok=True)
     start_time = time.time()
 
+    # اصلاح پروگرس بار
     await client.download_media(
         file_id,
         file_name=download_path,
@@ -113,6 +115,8 @@ async def download_and_trim_audio_upload(client: Client, message: Message, file_
         trimmed.export(output_path, format="mp3")
 
         upload_start = time.time()
+
+        # اصلاح پروگرس بار برای آپلود
         await message.reply_audio(
             output_path,
             caption="فایل صوتی برش‌خورده آماده است!",
