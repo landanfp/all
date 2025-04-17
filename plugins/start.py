@@ -1,8 +1,9 @@
+import os
+import time
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from plugins.database import download_file_stream, upload_to_log_channel
 from moviepy.editor import VideoFileClip
-import os
+from plugins.database import download_file_stream
 
 user_states = {}
 
@@ -125,8 +126,10 @@ async def start_cutting_process(client, callback_query: CallbackQuery):
         if os.path.exists(original_path):
             os.remove(original_path)
 
-    await callback_query.message.reply("در حال آپلود فایل برش خورده...")
-    await upload_to_log_channel(client, cut_path, user_id, callback_query.message)
+    await callback_query.message.reply("در حال ارسال فایل برش خورده...")
+    
+    # ارسال فایل برش خورده به کاربر
+    await client.send_document(user_id, document=cut_path, caption="فایل برش خورده شما")
 
     os.remove(cut_path)
-    await callback_query.message.reply("فایل با موفقیت برش خورد و در کانال لاگ ذخیره شد.")
+    await callback_query.message.reply("فایل با موفقیت برش خورد و برای شما ارسال شد.")
