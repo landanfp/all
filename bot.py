@@ -1,7 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-from plugins import start
+#from plugins import start
 from plugins.cutvid import setup_handlers  # تغییر به cutvid
 
 # اطلاعات رباتت رو وارد کن
