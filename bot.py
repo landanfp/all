@@ -1,30 +1,16 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-
-#from plugins import start
 from plugins.cutvid import setup_handlers  # تغییر به cutvid
 
-# اطلاعات رباتت رو وارد کن
-api_id = "3335796"  # جایگزین کنید با api_id خود
-api_hash = "138b992a0e672e8346d8439c3f42ea78"  # جایگزین کنید با api_hash خود
-bot_token = "7136875110:AAFzyr2i2FbRrmst1sklkJPN7Yz2rXJvSew"  # جایگزین کنید با bot_token خود
+گ
+app = Client(
+    "media_cutter_bot",
+    api_id=3335796,  # جایگزین کن با API ID واقعی
+    api_hash="138b992a0e672e8346d8439c3f42ea78",  # جایگزین کن با API Hash واقعی
+    bot_token="7136875110:AAFzyr2i2FbRrmst1sklkJPN7Yz2rXJvSew",  # جایگزین کن با Bot Token واقعی
+    plugins=dict(root="plugins")  # لود اتوماتیک از پوشه plugins
+)
 
-app = Client("media_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
-
-@app.on_message(filters.command("start"))
-async def start_command(client: Client, message: Message):
-    await message.reply_text(
-        "سلام! به ربات خوش اومدی.\nبرای شروع استفاده از ربات، دکمه زیر رو بزن:",
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [InlineKeyboardButton("شروع", callback_data="start_using_bot")]
-            ]
-        )
-    )
-
-@app.on_callback_query()
-async def handle_callback(client, callback_query):
-    if callback_query.data == "start_using_bot":
-        await callback_query.message.edit_text("استفاده از ربات آغاز شد!")
-
-app.run()
+if __name__ == "__main__":
+    print("Bot is running...")
+    app.run()
