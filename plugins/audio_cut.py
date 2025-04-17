@@ -1,7 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
-#from plugins.database import download_and_trim_audio_upload
-from plugins.database import download_and_trim_upload, download_and_trim_audio_upload
+from plugins.database import download_and_trim_audio_upload
 
 user_audio_state = {}
 
@@ -45,6 +44,5 @@ async def start_audio_trimming(client: Client, callback_query: CallbackQuery):
         return
 
     await callback_query.message.edit_text("در حال دانلود و برش فایل صوتی...")
-    # فراخوانی تابع دانلود و برش صوت
     await download_and_trim_audio_upload(client, callback_query.message, state["file_id"], state["start"], state["end"])
     del user_audio_state[user_id]
