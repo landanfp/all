@@ -3,16 +3,14 @@ from fastapi import FastAPI
 import threading
 import uvicorn
 
-# Pyrogram bot setup
 app = Client(
     "media_cutter_bot",
     api_id=3335796,
     api_hash="138b992a0e672e8346d8439c3f42ea78",
     bot_token="6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8",
-    plugins=dict(root="plugins")  # فقط همین مسیر نسبی رو بذار
+    plugins=dict(root="plugins")  # مطمئن باش دقیقا اینه
 )
 
-# FastAPI app for health check
 web_app = FastAPI()
 
 @web_app.get("/")
