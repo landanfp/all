@@ -104,9 +104,20 @@ async def start_cutting_process(client, callback_query: CallbackQuery):
     cut_path = f"{user_id}_cut.mp4"
 
     try:
-        clip = VideoFileClip(original_path).subclip(start_time, end_time)
-        clip.write_videofile(cut_path, codec="libx264", audio_codec="aac")
+        clip = VideoFileClip(original_path)
+        clip_duration = clip.duration  # Getting the duration of the video
+
+        # Ensure that the cut times are within the video duration range
+        if start_time < 0 or end_time > clip_duration:
+            await callback_query.message.reply("تایم برش خارج از محدوده ویدیو است.")
+            return
+
+        # Cut the video from start_time to end_time
+        cut_clip = clip.subclip(start_time, end_time)
+        cut_clip.write_videofile(cut_path, codec="libx264", audio_codec="aac")
+        cut_clip.close()
         clip.close()
+
     except Exception as e:
         await callback_query.message.reply(f"خطا در برش ویدیو: {str(e)}")
         return
