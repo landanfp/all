@@ -1,6 +1,7 @@
 
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+import cutvideo
 
 @Client.on_message(filters.command("start") & filters.private)
 async def start(client, message: Message):
