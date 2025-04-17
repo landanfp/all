@@ -26,5 +26,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -c "from moviepy.editor import VideoFileClip; print('MoviePy installed successfully.')"
 
 # اجرای برنامه اصلی
-CMD ["python", "media_bot_project.py"]
+CMD ["python3", "media_bot_project.py"]
 
