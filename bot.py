@@ -1,15 +1,30 @@
-from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-#from plugins import video_cut, audio_cut  
+from fastapi import FastAPI
+import threading
+import uvicorn
 
 app = Client(
     "media_cutter_bot",
-    api_id=3335796,  # جایگزین کن با API ID واقعی
-    api_hash="138b992a0e672e8346d8439c3f42ea78",  # جایگزین کن با API Hash واقعی
-    bot_token="6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8",  # جایگزین کن با Bot Token واقعی
-    plugins=dict(root="plugins")  # لود اتوماتیک از پوشه plugins
+    api_id=3335796,
+    api_hash="138b992a0e672e8346d8439c3f42ea78",
+    bot_token="6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8",
+    plugins=dict(root="plugins")
 )
+
+# FastAPI app
+web_app = FastAPI()
+
+@web_app.get("/")
+def read_root():
+    return {"status": "ok"}
+
+def run_web():
+    uvicorn.run(web_app, host="0.0.0.0", port=8000)
 
 if __name__ == "__main__":
     print("Bot is running...")
+
+    # اجرای وب‌سرور روی ترد جدا
+    threading.Thread(target=run_web).start()
+    
+    # اجرای بات تلگرام
     app.run()
