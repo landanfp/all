@@ -3,7 +3,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from plugins.database import download_file_stream
 from moviepy.editor import VideoFileClip
-from plugins.database progress_for_pyrogram
+#from plugins.database progress_for_pyrogram
 user_states = {}
 
 def time_to_seconds(time_str):
