@@ -41,7 +41,7 @@ async def add_watermark(client, message):
     # افزودن واترمارک به ویدیو با FFmpeg
     watermark_text = "@SeriesPlus1"
     ffmpeg_command = [
-        'ffmpeg', '-i', download_path, '-vf', f"drawtext=text='{watermark_text}':x=(w-text_w)/2:y=(h-text_h)/2:fontsize={font_size}:fontcolor=white", 
+        'ffmpeg', '-i', download_path, '-vf', f"drawtext=text='{watermark_text}':x='if(gte(t\,5)\,W+tw\,0)':y=H-th-10:fontsize={font_size}:fontcolor=white:alpha=0.8", 
         '-c:a', 'copy', 'output_video.mp4'
     ]
     subprocess.run(ffmpeg_command)
