@@ -58,6 +58,34 @@ async def progress_bar(current, total, status_message, action, start):
     except:
         pass
 
+async def process_video_with_watermark(input_path, output_path, status_message, start_time):
+    # دستور ffmpeg برای افزودن واترمارک
+    command = [
+        "ffmpeg", "-i", input_path,
+        "-vf", "drawtext=text='@SeriesPlus1':fontcolor=white:fontsize=50:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,20)'",
+        "-codec:a", "copy", "-progress", "pipe:1", output_path
+    ]
+    
+    process = await asyncio.create_subprocess_exec(
+        *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+
+    while True:
+        output = await process.stdout.read(1024)
+        if not output:
+            break
+        # استخراج درصد پیشرفت از خروجی ffmpeg
+        output_str = output.decode('utf-8')
+        if "out_time_ms" in output_str:
+            # استخراج زمان پردازش و محاسبه درصد پیشرفت
+            out_time = int(output_str.split("out_time_ms=")[1].split("\n")[0])
+            duration = int(output_str.split("duration=")[1].split("\n")[0])
+            current = out_time / 1000000
+            total = duration
+            await progress_bar(current, total, status_message, "در حال افزودن واترمارک...", start_time)
+
+    await process.wait()
+
 @app.on_message(filters.video & filters.private)
 async def add_watermark(client: Client, message: Message):
     status = await message.reply("در حال دانلود و افزودن واترمارک...")
@@ -76,17 +104,9 @@ async def add_watermark(client: Client, message: Message):
 
         # تولید فایل خروجی در دیسک
         temp_output_path = "wm_" + os.path.basename(temp_input_path)
-        command = [
-            "ffmpeg", "-i", temp_input_path,
-            "-vf", "drawtext=text='@SeriesPlus1':fontcolor=white:fontsize=50:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,20)'",
-            "-codec:a", "copy", temp_output_path
-        ]
-        
-        # اجرای دستور ffmpeg به صورت همزمان در پس‌زمینه
-        process = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
 
-        # در اینجا به صورت غیر همزمان منتظر می‌مانیم تا ffmpeg تمام شود
-        await process.communicate()
+        # پردازش ویدیو برای افزودن واترمارک
+        await process_video_with_watermark(temp_input_path, temp_output_path, status, start_time)
 
         if not os.path.exists(temp_output_path):
             await status.edit(f"خطا در پردازش ویدیو")
@@ -102,9 +122,8 @@ async def add_watermark(client: Client, message: Message):
         # آپلود فایل واترمارک‌دار
         await status.edit("در حال آپلود فایل واترمارک‌دار...")
         
-        # تست آپلود مستقیم به پیغام (بدون دیگر پارامترهای اضافی)
+        # ارسال ویدیو
         try:
-            # ارسال ویدیو
             await message.reply_video(
                 video=temp_output_path,
                 caption="✅ ویدیو با واترمارک ارسال شد.",
