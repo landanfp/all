@@ -2,6 +2,7 @@ from pyrogram import Client, filters
 import subprocess
 from io import BytesIO
 import time
+import os
 
 api_id = '3335796'
 api_hash = '138b992a0e672e8346d8439c3f42ea78'
@@ -30,20 +31,20 @@ async def start_command(client, message):
 async def add_watermark(client, message):
     status = await message.reply("در حال دانلود و افزودن واترمارک متحرک...")
 
-    file = BytesIO()
-    await message.download(file)
-    file.seek(0)
+    # ایجاد یک مسیر موقت برای ذخیره ویدیو
+    temp_file_path = f"temp_{message.video.file_id}.mp4"
+    await message.download(temp_file_path)  # ذخیره ویدیو به صورت محلی
 
     process = subprocess.Popen(
         [
-            "ffmpeg", "-i", "pipe:0",
+            "ffmpeg", "-i", temp_file_path,
             "-vf", "drawtext=text='@SeriesPlus1':fontcolor=white:fontsize=24:y=h-line_h-20:x=mod(100*t\\,w+text_w)",
             "-c:v", "libx264", "-preset", "fast", "-f", "mp4", "pipe:1"
         ],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
     )
 
-    output_data, _ = process.communicate(input=file.read())
+    output_data, _ = process.communicate()
     output_stream = BytesIO(output_data)
     output_stream.name = "watermarked.mp4"
     output_stream.seek(0)
@@ -86,5 +87,8 @@ async def add_watermark(client, message):
     )
 
     await status.delete()
+
+    # حذف فایل موقت پس از پردازش
+    os.remove(temp_file_path)
 
 app.run()
