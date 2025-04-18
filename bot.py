@@ -88,12 +88,12 @@ async def add_watermark(client: Client, message: Message):
             await status.edit(f"خطا در پردازش ویدیو:\n{stderr.decode()}")
             return
 
-        # اطمینان از وجود فایل پس از پردازش
-        if not os.path.exists(temp_output_path):
-            return await status.edit("فایل خروجی وجود ندارد.")
-
         # چاپ لاگ مسیر فایل
         print(f"فایل خروجی در مسیر: {temp_output_path}")
+
+        # چک کردن موجود بودن فایل
+        if not os.path.isfile(temp_output_path):
+            return await status.edit(f"فایل خروجی وجود ندارد. مسیر: {temp_output_path}")
 
         # آپلود فایل واترمارک‌دار
         await status.edit("در حال آپلود فایل واترمارک‌دار...")
