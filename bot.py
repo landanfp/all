@@ -1,5 +1,4 @@
 from pyrogram import Client, filters
-from pyrogram.types import InputFile
 import subprocess
 from io import BytesIO
 import time
@@ -21,7 +20,7 @@ def progress_bar(progress):
     bar_length = 20
     filled = int(bar_length * progress)
     bar = '█' * filled + '─' * (bar_length - filled)
-    return f"[{bar}] {int(progress*100)}%"
+    return f"[{bar}] {int(progress * 100)}%"
 
 @app.on_message(filters.command("start"))
 async def start_command(client, message):
@@ -76,13 +75,14 @@ async def add_watermark(client, message):
                 f"زمان باقی‌مانده: {int(eta)} ثانیه"
             )
             try:
-                await status.edit_text(msg)
+                await status.edit(msg)
             except:
                 pass
 
     await message.reply_video(
-        video=InputFile(generator(), file_name="watermarked.mp4", file_size=total_size),
-        caption="ویدیو با واترمارک متحرک آماده است."
+        video=generator(),
+        caption="ویدیو با واترمارک متحرک آماده است.",
+        file_name="watermarked.mp4"
     )
 
     await status.delete()
