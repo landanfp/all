@@ -6,7 +6,7 @@ import os
 
 api_id = '3335796'
 api_hash = '138b992a0e672e8346d8439c3f42ea78'
-bot_token = '7136875110:AAFzyr2i2FbRrmst1sklkJPN7Yz2rXJvSew'
+bot_token = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
 
 app = Client("watermark_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
@@ -41,10 +41,17 @@ async def add_watermark(client, message):
             "-vf", "drawtext=text='@SeriesPlus1':fontcolor=white:fontsize=24:y=h-line_h-20:x=mod(100*t\\,w+text_w)",
             "-c:v", "libx264", "-preset", "fast", "-f", "mp4", "pipe:1"
         ],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
 
-    output_data, _ = process.communicate()
+    # دریافت داده‌های خروجی FFmpeg
+    output_data, err = process.communicate()
+    
+    # در صورتی که خطایی وجود داشته باشد، نمایش می‌دهیم
+    if process.returncode != 0:
+        await status.edit(f"خطا در پردازش ویدیو: {err.decode()}")
+        return
+
     output_stream = BytesIO(output_data)
     output_stream.name = "watermarked.mp4"
     output_stream.seek(0)
@@ -80,6 +87,7 @@ async def add_watermark(client, message):
             except:
                 pass
 
+    # ارسال ویدیو به کاربر با استفاده از generator
     await message.reply_video(
         video=generator(),
         caption="ویدیو با واترمارک متحرک آماده است.",
