@@ -1,102 +1,108 @@
 from pyrogram import Client, filters
-import subprocess
-from io import BytesIO
-import time
+from pyrogram.types import Message
 import os
+import asyncio
+import time
+import math
+import subprocess
 
-api_id = '3335796'
-api_hash = '138b992a0e672e8346d8439c3f42ea78'
-bot_token = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
+# توکن و APIهای ربات
+API_ID = '3335796'
+API_HASH = '138b992a0e672e8346d8439c3f42ea78'
+BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
 
-app = Client("watermark_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-def human_readable_size(size):
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size < 1024.0:
-            return f"{size:.2f} {unit}"
-        size /= 1024.0
-    return f"{size:.2f} TB"
+app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-def progress_bar(progress):
-    bar_length = 20
-    filled = int(bar_length * progress)
-    bar = '█' * filled + '─' * (bar_length - filled)
-    return f"[{bar}] {int(progress * 100)}%"
 
-@app.on_message(filters.command("start"))
-async def start_command(client, message):
-    await message.reply("سلام! ویدیوی خودتو بفرست تا واترمارک متحرک روش قرار بگیره.")
+def convert_size(size_bytes):
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB", "TB")
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p, 2)
+    return f"{s} {size_name[i]}"
 
-@app.on_message(filters.video)
-async def add_watermark(client, message):
+
+async def progress_bar(current, total, status_message, action, start):
+    now = time.time()
+    diff = now - start
+    if diff == 0:
+        diff = 0.001
+
+    percentage = current * 100 / total
+    speed = current / diff
+    elapsed_time = round(diff)
+    eta = round((total - current) / speed)
+
+    bar_length = 15
+    filled_length = int(bar_length * percentage / 100)
+    bar = "█" * filled_length + "░" * (bar_length - filled_length)
+
+    current_size = convert_size(current)
+    total_size = convert_size(total)
+    speed_str = convert_size(speed) + "/s"
+
+    text = f"""
+{action}
+[{bar}] {percentage:.2f}%
+• حجم: {current_size} / {total_size}
+• سرعت: {speed_str}
+• زمان سپری‌شده: {elapsed_time}s
+• زمان باقی‌مانده: {eta}s
+"""
+    try:
+        await status_message.edit(text)
+    except:
+        pass
+
+
+@app.on_message(filters.video & filters.private)
+async def add_watermark(client: Client, message: Message):
     status = await message.reply("در حال دانلود و افزودن واترمارک متحرک...")
 
-    # ایجاد یک مسیر موقت برای ذخیره ویدیو
-    temp_file_path = f"temp_{message.video.file_id}.mp4"
-    await message.download(temp_file_path)  # ذخیره ویدیو به صورت محلی
+    try:
+        start_time = time.time()
+        temp_input_path = await message.download(progress=progress_bar, progress_args=(status, "در حال دانلود...", start_time))
 
-    process = subprocess.Popen(
-        [
-            "ffmpeg", "-i", temp_file_path,
-            "-vf", "drawtext=text='@SeriesPlus1':fontcolor=white:fontsize=24:y=h-line_h-20:x=mod(100*t\\,w+text_w)",
-            "-c:v", "libx264", "-preset", "fast", "-f", "mp4", "pipe:1"
-        ],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
+        if not temp_input_path or not os.path.exists(temp_input_path):
+            return await status.edit("خطا در دانلود فایل.")
 
-    # دریافت داده‌های خروجی FFmpeg
-    output_data, err = process.communicate()
-    
-    # در صورتی که خطایی وجود داشته باشد، نمایش می‌دهیم
-    if process.returncode != 0:
-        await status.edit(f"خطا در پردازش ویدیو: {err.decode()}")
-        return
+        temp_output_path = "wm_" + os.path.basename(temp_input_path)
 
-    output_stream = BytesIO(output_data)
-    output_stream.name = "watermarked.mp4"
-    output_stream.seek(0)
+        # واترمارک متنی وسط ویدیو با FFmpeg
+        command = [
+            "ffmpeg", "-i", temp_input_path,
+            "-vf", "drawtext=text='@SeriesPlus1':fontcolor=white:fontsize=50:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,20)'",
+            "-codec:a", "copy", temp_output_path
+        ]
+        process = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        _, stderr = await process.communicate()
 
-    total_size = len(output_data)
-    chunk_size = 1024 * 64
-    uploaded = 0
-    start_time = time.time()
+        if not os.path.exists(temp_output_path):
+            await status.edit(f"خطا در پردازش ویدیو:\n{stderr.decode()}")
+            os.remove(temp_input_path)
+            return
 
-    async def generator():
-        nonlocal uploaded
-        while True:
-            chunk = output_stream.read(chunk_size)
-            if not chunk:
-                break
-            uploaded += len(chunk)
-            yield chunk
+        await status.edit("در حال آپلود فایل واترمارک‌دار...")
+        await message.reply_video(
+            video=temp_output_path,
+            caption="✅ ویدیو با واترمارک ارسال شد.",
+            progress=progress_bar,
+            progress_args=(status, "در حال آپلود...", time.time())
+        )
 
-            elapsed = time.time() - start_time
-            speed = uploaded / elapsed
-            eta = (total_size - uploaded) / speed if speed > 0 else 0
-            progress = uploaded / total_size
-            bar = progress_bar(progress)
-            msg = (
-                f"در حال آپلود...\n"
-                f"{bar}\n"
-                f"حجم: {human_readable_size(uploaded)} / {human_readable_size(total_size)}\n"
-                f"سرعت: {human_readable_size(speed)}/s\n"
-                f"زمان باقی‌مانده: {int(eta)} ثانیه"
-            )
-            try:
-                await status.edit(msg)
-            except:
-                pass
+        await status.delete()
 
-    # ارسال ویدیو به کاربر با استفاده از generator
-    await message.reply_video(
-        video=generator(),
-        caption="ویدیو با واترمارک متحرک آماده است.",
-        file_name="watermarked.mp4"
-    )
+    except Exception as e:
+        await status.edit(f"خطا در پردازش: {e}")
 
-    await status.delete()
+    finally:
+        if os.path.exists(temp_input_path):
+            os.remove(temp_input_path)
+        if os.path.exists(temp_output_path):
+            os.remove(temp_output_path)
 
-    # حذف فایل موقت پس از پردازش
-    os.remove(temp_file_path)
 
 app.run()
