@@ -81,11 +81,15 @@ async def add_watermark(client: Client, message: Message):
             "-vf", "drawtext=text='@SeriesPlus1':fontcolor=white:fontsize=50:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,20)'",
             "-codec:a", "copy", temp_output_path
         ]
+        
+        # اجرای دستور ffmpeg به صورت همزمان در پس‌زمینه
         process = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        _, stderr = await process.communicate()
+
+        # در اینجا به صورت غیر همزمان منتظر می‌مانیم تا ffmpeg تمام شود
+        await process.communicate()
 
         if not os.path.exists(temp_output_path):
-            await status.edit(f"خطا در پردازش ویدیو:\n{stderr.decode()}")
+            await status.edit(f"خطا در پردازش ویدیو")
             return
 
         # چاپ لاگ مسیر فایل
