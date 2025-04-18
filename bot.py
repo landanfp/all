@@ -97,17 +97,19 @@ async def add_watermark(client: Client, message: Message):
 
         # آپلود فایل واترمارک‌دار
         await status.edit("در حال آپلود فایل واترمارک‌دار...")
+        
+        # تست آپلود مستقیم به پیغام (بدون دیگر پارامترهای اضافی)
         try:
+            # ارسال ویدیو
             await message.reply_video(
                 video=temp_output_path,
                 caption="✅ ویدیو با واترمارک ارسال شد.",
                 progress=progress_bar,
                 progress_args=(status, "در حال آپلود...", time.time())
             )
+            await status.delete()
         except Exception as e:
             await status.edit(f"خطا در آپلود فایل: {str(e)}")
-
-        await status.delete()
 
     except Exception as e:
         await status.edit(f"خطا در پردازش: {e}")
