@@ -20,6 +20,7 @@ flask_app = Flask(__name__)
 @flask_app.route("/")
 def home():
     return "OK", 200
+
 def run_flask():
     flask_app.run(host="0.0.0.0", port=8000)
 
@@ -87,14 +88,22 @@ async def add_watermark(client: Client, message: Message):
             await status.edit(f"خطا در پردازش ویدیو:\n{stderr.decode()}")
             return
 
+        # اطمینان از وجود فایل پس از پردازش
+        if not os.path.exists(temp_output_path):
+            return await status.edit("فایل خروجی وجود ندارد.")
+
         # آپلود فایل واترمارک‌دار
         await status.edit("در حال آپلود فایل واترمارک‌دار...")
-        await message.reply_video(
-            video=temp_output_path,
-            caption="✅ ویدیو با واترمارک ارسال شد.",
-            progress=progress_bar,
-            progress_args=(status, "در حال آپلود...", time.time())
-        )
+        try:
+            await message.reply_video(
+                video=temp_output_path,
+                caption="✅ ویدیو با واترمارک ارسال شد.",
+                progress=progress_bar,
+                progress_args=(status, "در حال آپلود...", time.time())
+            )
+        except Exception as e:
+            await status.edit(f"خطا در آپلود فایل: {str(e)}")
+
         await status.delete()
 
     except Exception as e:
@@ -108,5 +117,8 @@ async def add_watermark(client: Client, message: Message):
             os.remove(temp_output_path)
 
 if __name__ == "__main__":
+    # اجرای Flask در یک Thread جداگانه
     Thread(target=run_flask).start()
+    
+    # اجرای ربات
     app.run()
