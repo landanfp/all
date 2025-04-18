@@ -58,6 +58,7 @@ async def progress_bar(current, total, status_message, action, start):
     except:
         pass
 
+# پردازش ویدیو با واترمارک
 async def process_video_with_watermark(input_path, output_path, status_message, start_time):
     # دستور ffmpeg برای افزودن واترمارک
     command = [
@@ -74,15 +75,27 @@ async def process_video_with_watermark(input_path, output_path, status_message, 
         output = await process.stdout.read(1024)
         if not output:
             break
-        # استخراج درصد پیشرفت از خروجی ffmpeg
+
+        # تبدیل خروجی به رشته
         output_str = output.decode('utf-8')
-        if "out_time_ms" in output_str:
-            # استخراج زمان پردازش و محاسبه درصد پیشرفت
-            out_time = int(output_str.split("out_time_ms=")[1].split("\n")[0])
-            duration = int(output_str.split("duration=")[1].split("\n")[0])
-            current = out_time / 1000000
-            total = duration
-            await progress_bar(current, total, status_message, "در حال افزودن واترمارک...", start_time)
+        
+        # چاپ خروجی برای بررسی
+        print(f"FFmpeg Output: {output_str}")
+
+        # اطمینان از وجود داده‌های مورد نیاز در خروجی
+        if "out_time_ms" in output_str and "duration=" in output_str:
+            try:
+                out_time = int(output_str.split("out_time_ms=")[1].split("\n")[0])
+                duration = int(output_str.split("duration=")[1].split("\n")[0])
+                
+                # محاسبه پیشرفت و به‌روزرسانی نوار پیشرفت
+                current = out_time / 1000000
+                total = duration
+                await progress_bar(current, total, status_message, "در حال افزودن واترمارک...", start_time)
+
+            except Exception as e:
+                print(f"Error while parsing FFmpeg output: {e}")
+                continue
 
     await process.wait()
 
@@ -105,15 +118,8 @@ async def add_watermark(client: Client, message: Message):
         # تولید فایل خروجی در دیسک
         temp_output_path = "wm_" + os.path.basename(temp_input_path)
 
-        # پردازش ویدیو برای افزودن واترمارک
+        # پردازش ویدیو با افزودن واترمارک
         await process_video_with_watermark(temp_input_path, temp_output_path, status, start_time)
-
-        if not os.path.exists(temp_output_path):
-            await status.edit(f"خطا در پردازش ویدیو")
-            return
-
-        # چاپ لاگ مسیر فایل
-        print(f"فایل خروجی در مسیر: {temp_output_path}")
 
         # چک کردن موجود بودن فایل
         if not os.path.isfile(temp_output_path):
