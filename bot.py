@@ -5,11 +5,11 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 from pymongo import MongoClient
 
 # Configuration
-BOT_TOKEN = "6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8"
+BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
 #LOG_CHANNEL  = int(os.getenv("LOG_CHANNEL", "-1001234567890"))
-MONGO_URI = "mongodb+srv://abirhasan2005:abirhasan@cluster0.i6qzp.mongodb.net/cluster0?retryWrites=true&w=majority"  # e.g. mongodb+srv://user:pass@.../cluster0
-API_HASH = "138B992A0E672E8346D8439C3F42EA78" 
-API_ID = 3335796 
+MONGO_URI = 'mongodb+srv://abirhasan2005:abirhasan@cluster0.i6qzp.mongodb.net/cluster0?retryWrites=true&w=majority'  # e.g. mongodb+srv://user:pass@.../cluster0
+API_HASH = '138B992A0E672E8346D8439C3F42EA78'
+API_ID = '3335796'
 # Initialize MongoDB
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client.get_database()       # uses default database from URI
