@@ -8,7 +8,8 @@ from pymongo import MongoClient
 BOT_TOKEN    = os.getenv("BOT_TOKEN")
 LOG_CHANNEL  = int(os.getenv("LOG_CHANNEL", "-1001234567890"))
 MONGO_URI    = os.getenv("MONGO_URI")  # e.g. mongodb+srv://user:pass@.../cluster0
-
+API_HASH = 138B992A0E672E8346D8439C3F42EA78 
+API_ID = 3335796 
 # Initialize MongoDB
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client.get_database()       # uses default database from URI
