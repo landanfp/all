@@ -5,7 +5,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 from pymongo import MongoClient
 
 # Configuration
-BOT_TOKEN    = os.getenv("BOT_TOKEN")
+BOT_TOKEN = 6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8
 LOG_CHANNEL  = int(os.getenv("LOG_CHANNEL", "-1001234567890"))
 MONGO_URI    = os.getenv("MONGO_URI")  # e.g. mongodb+srv://user:pass@.../cluster0
 API_HASH = 138B992A0E672E8346D8439C3F42EA78 
@@ -52,7 +52,7 @@ def progress_cb(d, t, client, msg, uid, fid):
     log_progress(uid, fid, d, t, speed, eta)
 
 VIDEO, SV, EV, AUDIO, SA, EA = range(6)
-app = Client(None, bot_token=BOT_TOKEN)
+app = Client("trim", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 @app.on_message(filters.command("start"))
 async def start_cmd(c, m):
