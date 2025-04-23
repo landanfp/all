@@ -3,7 +3,7 @@ from threading import Lock
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 from pymongo import MongoClient
-
+from config import *
 # Configuration
 BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
 LOG_CHANNEL = -1001234567890  # مقدار دلخواه وارد کن
