@@ -52,7 +52,7 @@ def progress_cb(d, t, client, msg, uid, fid):
     log_progress(uid, fid, d, t, speed, eta)
 
 VIDEO, SV, EV, AUDIO, SA, EA = range(6)
-app = Client("trim", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("trim", api_id=Config.API_ID, api_hash=Config.API_HASH, bot_token=Config.BOT_TOKEN)
 
 @app.on_message(filters.command("start"))
 async def start_cmd(c, m):
