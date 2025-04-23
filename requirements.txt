@@ -1,10 +1,11 @@
 
 pyrogram==2.0.106
 tgcrypto 
-moviepy
 pillow
-gtts
-pydub
-zipfile36
 aiofiles
 aiohttp
+pymongo[srv]
+dnspython
+python-dotenv
+
+
