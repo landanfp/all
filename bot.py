@@ -8,7 +8,7 @@ from pymongo import MongoClient
 MONGO_URI = 'mongodb+srv://abirhasan2005:abirhasan@cluster0.i6qzp.mongodb.net/cluster0?retryWrites=true&w=majority'
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
+BOT_TOKEN = '5355055672:AAHoidc0x6nM3g2JHmb7xhWKmwGJOoKFNXY'
 LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
 app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -107,7 +107,7 @@ async def start_cut(c, q):
         await q.message.edit("جلسه‌ای برای شما پیدا نشد.")
         return
     if "start" not in s or "end" not in s:
-        await q.message.edit("زمان شروع یا پایان ناقصه.")
+        await q.message.edit("زمان شروع یا پایان ناقص است.")
         return
     if s["state"] not in ("EV", "EA"):
         await q.message.edit("حالت نهایی نادرسته. لطفاً زمان‌ها رو مجدد وارد کنید.")
