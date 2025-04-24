@@ -132,8 +132,21 @@ async def recv_time(c, m: Message):
 
 @app.on_callback_query(filters.regex("start_cut"))
 async def start_cut(c, q):
+    await q.answer()
+    print("start_cut triggered")  # برای تست لاگ
+
     u = q.from_user.id
-    s = sessions[u]
+    s = sessions.get(u)
+    if not s:
+        await q.message.edit("جلسه‌ای برای شما پیدا نشد.")
+        return
+    if "start" not in s or "end" not in s:
+        await q.message.edit("زمان شروع یا پایان ناقصه.")
+        return
+    if s["state"] not in (EV, EA):
+        await q.message.edit("حالت نهایی نادرسته. لطفاً زمان‌ها رو مجدد وارد کنید.")
+        return
+
     m = s["media"]
     mm = s["main"]
     st, sd, ed = s["state"], s["start"], s["end"]
