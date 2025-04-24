@@ -133,8 +133,6 @@ async def recv_time(c, m: Message):
 @app.on_callback_query(filters.regex("start_cut"))
 async def start_cut(c, q):
     await q.answer()
-    print("start_cut triggered")  # برای تست لاگ
-
     u = q.from_user.id
     s = sessions.get(u)
     if not s:
@@ -156,6 +154,7 @@ async def start_cut(c, q):
     out = f"downloads/{fid}_cut.{ext}"
     s["dl_start"] = time.time()
 
+    # نمایش پیشرفت دانلود
     await c.download_media(m, file_name=inp, progress=lambda d, t: progress_cb(d, t, c, mm, u, fid))
     subprocess.run(["ffmpeg", "-y", "-i", inp, "-ss", str(sd), "-to", str(ed), "-c", "copy", out],
                    stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
