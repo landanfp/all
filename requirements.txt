@@ -1,16 +1,11 @@
 
 pyrogram==2.0.106
 tgcrypto 
-pillow
-instaloader
 aiofiles
 aiohttp
-pymongo[srv]
-dnspython
-python-dotenv
-uvicorn
-fastapi
-flask
-jdatetime
-pytz
+opencv-python
+dlib
+deepface
+mediapipe
+
 
