@@ -4,7 +4,6 @@ tgcrypto
 aiofiles
 aiohttp
 opencv-python
-dlib
 deepface
 mediapipe
 
