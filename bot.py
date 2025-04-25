@@ -1,6 +1,6 @@
 import jdatetime
 import pytz
-import datetime  # اطمینان از import ماژول datetime
+import datetime
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from instaloader import Instaloader, Post, Profile
@@ -11,7 +11,7 @@ import glob
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
-LOG_CHANNEL = -1001792962793  
+LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
 known_users = set()
 tehran_tz = pytz.timezone('Asia/Tehran')
@@ -67,7 +67,6 @@ async def download_story(url, message):
 @bot.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message):
     user_id = message.from_user.id
-    known_users.add(user_id)
     keyboard = InlineKeyboardMarkup(
         [
             [
@@ -78,28 +77,31 @@ async def start_handler(client, message):
     )
     await message.reply("سلام! لینک پست یا ریلز اینستاگرام، یوزرنیم پیج یا لینک استوری رو بفرستید.", reply_markup=keyboard)
 
-    # ارسال پیام به کانال لاگ
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
-    now_tehran = now_utc.astimezone(tehran_tz)
-    shamsi_date = jdatetime.datetime.fromgregorian(datetime=now_tehran).strftime("%Y/%m/%d")
-    tehran_time = now_tehran.strftime("%H:%M:%S")
+    # بررسی اینکه آیا کاربر قبلاً استارت کرده است یا خیر
+    if user_id not in known_users:
+        known_users.add(user_id)
+        # ارسال پیام به کانال لاگ (فقط برای اولین استارت)
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        now_tehran = now_utc.astimezone(tehran_tz)
+        shamsi_date = jdatetime.datetime.fromgregorian(datetime=now_tehran).strftime("%Y/%m/%d")
+        tehran_time = now_tehran.strftime("%H:%M:%S")
 
-    user = message.from_user
-    username = user.username if user.username else "ندارد"
-    first_name = user.first_name if user.first_name else ""
-    last_name = user.last_name if user.last_name else ""
-    full_name = f"{first_name} {last_name}".strip() or "ندارد"
+        user = message.from_user
+        username = user.username if user.username else "ندارد"
+        first_name = user.first_name if user.first_name else ""
+        last_name = user.last_name if user.last_name else ""
+        full_name = f"{first_name} {last_name}".strip() or "ندارد"
 
-    log_message = f"""✅ کاربر جدیدی به ربات پیوست.
+        log_message = f"""✅ کاربر جدیدی به ربات پیوست.
 تاریخ و ساعت ورود : {shamsi_date} {tehran_time}
 نام کاربر : {full_name}
 آیدی عددی : {user.id}
 یوزرنیم : @{username}"""
 
-    try:
-        await client.send_message(LOG_CHANNEL, log_message)
-    except Exception as e:
-        print(f"خطا در ارسال پیام لاگ: {e}")
+        try:
+            await client.send_message(LOG_CHANNEL, log_message)
+        except Exception as e:
+            print(f"خطا در ارسال پیام لاگ: {e}")
 
 # هندلر برای دکمه "راهنما"
 @bot.on_callback_query(filters.regex("help"))
@@ -144,10 +146,12 @@ async def insta_download(client, message):
                 await message.reply(f"خطا در ارسال پیام: {e}")
 
             downloaded_files = []
+            post_caption = None  # متغیری برای ذخیره کپشن
             try:
                 L = Instaloader(dirname_pattern="downloads", save_metadata=False, download_comments=False)
                 post = Post.from_shortcode(L.context, shortcode)
                 L.download_post(post, target=None)
+                post_caption = post.caption  # دریافت کپشن پست
 
                 downloaded_files = sorted(
                     glob.glob("downloads/*.mp4") + glob.glob("downloads/*.jpg"),
@@ -160,7 +164,8 @@ async def insta_download(client, message):
                     return
 
                 for file in downloaded_files:
-                    await message.reply_document(file)
+                    await message.reply_document(file, caption=post_caption if post_caption else "")
+                    os.remove(file)
 
                 if msg:
                     await msg.delete()
