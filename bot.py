@@ -1,199 +1,84 @@
-import jdatetime
-import pytz
-import datetime
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from instaloader import Instaloader, Post, Profile
+from pyrogram.types import Message
 import os
-import re
-import glob
+import io
 
-API_ID = '3335796'
-API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '5355055672:AAHoidc0x6nM3g2JHmb7xhWKmwGJOoKFNXY'
-LOG_CHANNEL = -1001792962793  # مقدار دلخواه
+# فرض بر این است که یک مدل AI برای انجام عملیات face swap دارید
+# این بخش باید با مدل واقعی که برای face swap دارید جایگزین شود.
+class ai_face_swap:
+    @staticmethod
+    def swap_faces(base_image_path, face_image_path):
+        # در اینجا باید از یک مدل واقعی برای face swap استفاده کنید
+        # برای مثال، این تابع فرضی یک تصویر را تولید می‌کند که باید آن را با مدل واقعی جایگزین کنید
+        with open(base_image_path, "rb") as f:
+            base_image = f.read()
+        with open(face_image_path, "rb") as f:
+            face_image = f.read()
 
-known_users = set()
-tehran_tz = pytz.timezone('Asia/Tehran')
+        # فرض کنید اینجا عملیات تعویض صورت انجام می‌شود
+        # برای سادگی فقط تصویر پایه را به‌صورت فرضی برمی‌گردانیم
+        return base_image  # این باید تصویر تعویض‌شده باشد
 
-bot = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# تعریف و پیکربندی ربات
+app = Client("face_swap_bot")
 
-# تابع استخراج شورت‌کد از لینک اینستاگرام
-def extract_shortcode(url):
-    match = re.search(r"(reel|p|tv)/([a-zA-Z0-9_-]+)", url)
-    if match:
-        return match.group(2)
-    return None
+# دیکشنری برای ذخیره عکس‌ها (در صورت نیاز به دیتابیس این قسمت تغییر می‌کند)
+user_images = {}
 
-# تابع ارسال پروفایل
-async def send_profile_picture(username, message):
-    try:
-        L = Instaloader()
-        try:
-            profile = Profile.from_username(L.context, username)
-            profile_pic_url = profile.profile_pic_url
-            await message.reply_photo(profile_pic_url)
-        except Exception as e:
-            await message.reply(f"خطا در دریافت عکس پروفایل (بدون لاگین): {e}")
-    except Exception as e:
-        await message.reply(f"خطا در ایجاد Instaloader: {e}")
-
-# تابع دانلود استوری
-async def download_story(url, message):
-    try:
-        L = Instaloader()
-        # استخراج یوزرنیم از URL استوری
-        username_match = re.search(r"instagram.com/stories/([a-zA-Z0-9_]+)", url)
-        if username_match:
-            username = username_match.group(1)
-            profile = Profile.from_username(L.context, username)
-            stories = L.get_stories(userids=[profile.userid])
-
-            # دریافت استوری‌ها و ارسال آن‌ها
-            for story in stories:
-                for item in story.get_items():
-                    if item.url:
-                        # ارسال ویدیو یا تصویر استوری
-                        if item.is_video:
-                            await message.reply_video(item.url)
-                        else:
-                            await message.reply_photo(item.url)
-        else:
-            await message.reply("لینک استوری معتبر نیست.")
-    except Exception as e:
-        await message.reply(f"خطا در دانلود استوری: {e}")
-
-# دستور /start
-@bot.on_message(filters.private & filters.command("start"))
-async def start_handler(client, message):
-    user_id = message.from_user.id
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("راهنما", callback_data="help"),
-                InlineKeyboardButton("کانال پشتیبان", url="https://t.me/ir_botz"),
-            ],
-        ]
+# خوش‌آمدگویی به کاربر هنگام استفاده از دستور /start
+@app.on_message(filters.command("start"))
+async def start_command(client, message):
+    await message.reply(
+        "سلام! خوش آمدید به ربات Face Swap. لطفاً ابتدا عکسی که صورت شما روی آن قرار می‌گیرد (عکس پایه) ارسال کنید."
     )
-    await message.reply("سلام! لینک پست یا ریلز اینستاگرام، یوزرنیم پیج یا لینک استوری رو بفرستید.", reply_markup=keyboard)
 
-    # بررسی اینکه آیا کاربر قبلاً استارت کرده است یا خیر
-    if user_id not in known_users:
-        known_users.add(user_id)
-        # ارسال پیام به کانال لاگ (فقط برای اولین استارت)
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
-        now_tehran = now_utc.astimezone(tehran_tz)
-        shamsi_date = jdatetime.datetime.fromgregorian(datetime=now_tehran).strftime("%Y/%m/%d")
-        tehran_time = now_tehran.strftime("%H:%M:%S")
-
-        user = message.from_user
-        username = user.username if user.username else "ندارد"
-        first_name = user.first_name if user.first_name else ""
-        last_name = user.last_name if user.last_name else ""
-        full_name = f"{first_name} {last_name}".strip() or "ندارد"
-
-        log_message = f"""✅ کاربر جدیدی به ربات پیوست.
-تاریخ و ساعت ورود : {shamsi_date} {tehran_time}
-نام کاربر : {full_name}
-آیدی عددی : {user.id}
-یوزرنیم : @{username}"""
-
-        try:
-            await client.send_message(LOG_CHANNEL, log_message)
-        except Exception as e:
-            print(f"خطا در ارسال پیام لاگ: {e}")
-
-# هندلر برای دکمه "راهنما"
-@bot.on_callback_query(filters.regex("help"))
-async def help_callback(client: Client, callback_query: CallbackQuery):
-    await callback_query.answer()  # برای جلوگیری از نمایش ساعت شنی
-    await callback_query.message.reply_text("برای دانلود پست و ریلز اینستاگرام فقط کافیه\nلینک موردنظر را کپی و اینجا ارسال کنید.")
-
-# دستور /users
-@bot.on_message(filters.private & filters.command("users"))
-async def users_handler(client, message):
-    user_count = len(known_users)
-    await message.reply(f"{user_count}")
-
-# دریافت و دانلود پست
-@bot.on_message(filters.private & filters.text)
-async def insta_download(client, message):
+# درخواست عکس پایه از کاربر
+@app.on_message(filters.photo)
+async def handle_base_image(client, message: Message):
     user_id = message.from_user.id
-    known_users.add(user_id)
-    url = message.text.strip()
 
-    # بررسی اینکه آیا این یک لینک اینستاگرام است یا یوزرنیم
-    if "instagram.com" in url:
-        if "stories" in url:  # اگر لینک استوری باشد
-            await download_story(url, message)
-        else:
-            # تلاش برای استخراج یوزرنیم از لینک
-            username_match = re.search(r"instagram\.com/([a-zA-Z0-9_.]+)/?", url)
-            if username_match:
-                username = username_match.group(1)
-                await send_profile_picture(username, message)
-                return  # از ادامه پردازش به عنوان لینک پست جلوگیری شود
+    # ذخیره عکس پایه ارسال شده توسط کاربر
+    file = await message.download()
+    user_images[user_id] = {'base_image': file}
 
-            shortcode = extract_shortcode(url)
-            if not shortcode:
-                await message.reply("نتونستم کد پست رو استخراج کنم.")
-                return
+    await message.reply(
+        "عکس پایه دریافت شد! حالا لطفاً عکسی که صورت خود را می‌خواهید در آن قرار دهید ارسال کنید."
+    )
 
-            try:
-                msg = await message.reply("در حال دانلود...")
-            except Exception as e:
-                msg = None
-                await message.reply(f"خطا در ارسال پیام: {e}")
+# دریافت و انجام عملیات face swap
+@app.on_message(filters.photo)
+async def handle_face_swap(client, message: Message):
+    user_id = message.from_user.id
 
-            downloaded_files = []
-            post_caption = None  # متغیری برای ذخیره کپشن
-            try:
-                L = Instaloader(dirname_pattern="downloads", save_metadata=False, download_comments=False)
-                post = Post.from_shortcode(L.context, shortcode)
-                L.download_post(post, target=None)
-                post_caption = post.caption  # دریافت کپشن پست
+    # بررسی اینکه آیا عکس پایه قبلاً ارسال شده یا نه
+    if user_id not in user_images or 'base_image' not in user_images[user_id]:
+        await message.reply("لطفاً ابتدا عکس پایه را ارسال کنید.")
+        return
 
-                downloaded_files = sorted(
-                    glob.glob("downloads/*.mp4") + glob.glob("downloads/*.jpg"),
-                    key=os.path.getmtime,
-                    reverse=True
-                )[:2]
+    # دریافت عکس پایه که قبلاً ذخیره شده
+    base_image_path = user_images[user_id]['base_image']
 
-                if not downloaded_files:
-                    await (msg.edit("فایلی برای ارسال پیدا نشد.") if msg else message.reply("فایلی برای ارسال پیدا نشد."))
-                    return
+    # دریافت عکس صورت کاربر
+    face_image_file = await message.download()
+    
+    # استفاده از مدل AI برای انجام عملیات face swap
+    swapped_image = ai_face_swap.swap_faces(base_image_path, face_image_file)
 
-                for file in downloaded_files:
-                    await message.reply_document(file, caption=post_caption if post_caption else "")
-                    os.remove(file)
+    # ذخیره تصویر جدید به‌عنوان فایل
+    swapped_image_path = "swapped_image.jpg"
+    with open(swapped_image_path, "wb") as f:
+        f.write(swapped_image)
 
-                if msg:
-                    await msg.delete()
+    # ارسال تصویر با صورت تعویض‌شده به کاربر
+    await message.reply_photo(swapped_image_path, caption="این هم عکس شما با صورت تعویض شده!")
 
-            except Exception as e:
-                error_message = f"خطا در دانلود:\n{e}"
-                if msg:
-                    try:
-                        await msg.edit(error_message)
-                    except:
-                        await message.reply(error_message)
-                else:
-                    await message.reply(error_message)
+    # پاک کردن فایل‌های موقتی
+    os.remove(base_image_path)
+    os.remove(face_image_file)
+    os.remove(swapped_image_path)
 
-            finally:
-                # اطمینان از حذف فایل های دانلود شده
-                for file in downloaded_files:
-                    try:
-                        os.remove(file)
-                    except Exception as e:
-                        print(f"خطا در حذف فایل {file}: {e}")
+    # پاک کردن اطلاعات کاربر از دیکشنری پس از انجام عملیات
+    del user_images[user_id]
 
-    # اگر یوزرنیم پیج با @ ارسال شده باشد
-    elif "@" in url:
-        username = url.replace('@', '').strip()
-        await send_profile_picture(username, message)
-
-    else:
-        await message.reply("لینک اینستاگرام معتبر نیست یا یوزرنیم اشتباه است.")
-
-bot.run()
+if __name__ == "__main__":
+    app.run()
