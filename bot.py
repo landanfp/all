@@ -8,7 +8,7 @@ from pymongo import MongoClient
 MONGO_URI = 'mongodb+srv://abirhasan2005:abirhasan@cluster0.i6qzp.mongodb.net/cluster0?retryWrites=true&w=majority'
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
+BOT_TOKEN = '5355055672:AAHoidc0x6nM3g2JHmb7xhWKmwGJOoKFNXY'
 LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
 app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -66,11 +66,11 @@ async def cut_audio(c, q):
 async def recv_media(c, m: Message):
     u = m.from_user.id
     s = sessions.get(u)
-    print(f"Session state for user {u}: {s}")  # اضافه کردن برای بررسی وضعیت
+    print(f"Session state for user {u} (recv_media): {s}")
     if not s: return
     st = s.get("state")
     if st not in ["VIDEO", "AUDIO"]:
-        return  # اگر وضعیت VIDEO یا AUDIO نبود، پردازش نکن
+        return
     is_video = m.video is not None
     is_audio = m.audio is not None
     if st == "VIDEO" and not is_video:
@@ -98,6 +98,7 @@ async def recv_media(c, m: Message):
 @app.on_message(filters.text)
 async def recv_time(c, m: Message):
     u, s = m.from_user.id, sessions.get(m.from_user.id)
+    print(f"Session state for user {u} (recv_time): {s}")
     if not s: return
     st = s["state"]
     if st in ("SV", "SA"):
@@ -130,6 +131,7 @@ async def start_cut(c, q):
     await q.answer()
     u = q.from_user.id
     s = sessions.get(u)
+    print(f"Session state for user {u} (start_cut): {s}")
     if not s:
         await q.message.edit("جلسه‌ای برای شما پیدا نشد.")
         return
@@ -146,9 +148,10 @@ async def start_cut(c, q):
     sd = s["start"]
     ed = s["end"]
     fid = (m.video or m.audio or m.document).file_id
-    ext = "mp4" if st == "EV" else "mp3"
-    inp = f"downloads/{fid}.{ext}"
-    out = f"downloads/{fid}_cut.{ext}"
+    inp_ext = m.video.file_name.rsplit('.', 1)[-1].lower() if m.video else m.audio.file_name.rsplit('.', 1)[-1].lower()
+    inp = f"downloads/{fid}.{inp_ext}"
+    out_ext = "mp4" if st == "EV" else "mp3"
+    out = f"downloads/{fid}_cut.{out_ext}"
 
     await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nدر حال دانلود...")
     try:
@@ -162,15 +165,17 @@ async def start_cut(c, q):
         subprocess.run(["ffmpeg", "-y", "-i", inp, "-ss", str(sd), "-to", str(ed), "-c", "copy", out],
                        stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, check=True)
     except subprocess.CalledProcessError as e:
-        await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nخطا در برش: {e}")
+        await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nخطا در برش: {e}\n\n**دستور FFmpeg:**\n`ffmpeg -y -i {inp} -ss {sd} -to {ed} -c copy {out}`")
         os.remove(inp)
         return
 
     await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nدر حال آپلود...")
     send = c.send_video if st == "EV" else c.send_audio
     try:
-        await send(u, video=out if st == "EV" else None, audio=out if st == "EA" else None,
-                   progress=lambda current, total: update_progress(current, total, mm, "آپلود"))
+        if st == "EA":
+            await send(u, audio=out, caption=f"برش از {seconds_to_hms(sd)} تا {seconds_to_hms(ed)}")
+        else:
+            await send(u, video=out, caption=f"برش از {seconds_to_hms(sd)} تا {seconds_to_hms(ed)}")
     except Exception as e:
         await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nخطا در آپلود: {e}")
         os.remove(inp)
