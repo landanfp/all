@@ -8,7 +8,7 @@ from pymongo import MongoClient
 MONGO_URI = 'mongodb+srv://abirhasan2005:abirhasan@cluster0.i6qzp.mongodb.net/cluster0?retryWrites=true&w=majority'
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '7136875110:AAFzyr2i2FbRrmst1sklkJPN7Yz2rXJvSew'
+BOT_TOKEN = '5355055672:AAHoidc0x6nM3g2JHmb7xhWKmwGJOoKFNXY'
 LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
 app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -148,44 +148,47 @@ async def start_cut(c, q):
     sd = s["start"]
     ed = s["end"]
     fid = (m.video or m.audio or m.document).file_id
-    inp_ext = m.video.file_name.rsplit('.', 1)[-1].lower() if m.video else m.audio.file_name.rsplit('.', 1)[-1].lower()
-    inp = f"downloads/{fid}.{inp_ext}"
-    out_ext = "mp4" if st == "EV" else "mp3"
-    out = f"downloads/{fid}_cut.{out_ext}"
+    input_file = f"downloads/{fid}.{m.video.file_name.rsplit('.', 1)[-1].lower() if m.video else m.audio.file_name.rsplit('.', 1)[-1].lower()}"
+    output_ext = "mp4" if st == "EV" else "mp3"
+    output_file = f"downloads/{fid}_cut.{output_ext}"
 
     await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nدر حال دانلود...")
     try:
-        await c.download_media(m, file_name=inp, progress=lambda current, total: update_progress(current, total, mm, "دانلود"))
+        await c.download_media(m, file_name=input_file, progress=lambda current, total: update_progress(current, total, mm, "دانلود"))
     except Exception as e:
         await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nخطا در دانلود: {e}")
         return
 
     await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nدر حال برش...")
     try:
-        subprocess.run(["ffmpeg", "-y", "-i", inp, "-ss", str(sd), "-to", str(ed), "-c", "copy", out],
-                       stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, check=True)
+        if st == "EV":
+            subprocess.run(["ffmpeg", "-y", "-i", input_file, "-ss", str(sd), "-to", str(ed), "-c", "copy", output_file],
+                           stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, check=True)
+        elif st == "EA":
+            subprocess.run(["ffmpeg", "-y", "-i", input_file, "-ss", str(sd), "-to", str(ed), "-vn", "-acodec", "libmp3lame", output_file],
+                           stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, check=True)
     except subprocess.CalledProcessError as e:
-        await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nخطا در برش: {e}\n\n**دستور FFmpeg:**\n`ffmpeg -y -i {inp} -ss {sd} -to {ed} -c copy {out}`")
-        os.remove(inp)
+        await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nخطا در برش: {e}\n\n**دستور FFmpeg:**\n`ffmpeg -y -i {input_file} -ss {sd} -to {ed} {'-c copy' if st == 'EV' else '-vn -acodec libmp3lame'} {output_file}`")
+        os.remove(input_file)
         return
 
     await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nدر حال آپلود...")
     send = c.send_video if st == "EV" else c.send_audio
     try:
         if st == "EA":
-            await send(u, audio=out, caption=f"برش از {seconds_to_hms(sd)} تا {seconds_to_hms(ed)}")
+            await send(u, audio=output_file, caption=f"برش از {seconds_to_hms(sd)} تا {seconds_to_hms(ed)}")
         else:
-            await send(u, video=out, caption=f"برش از {seconds_to_hms(sd)} تا {seconds_to_hms(ed)}")
+            await send(u, video=output_file, caption=f"برش از {seconds_to_hms(sd)} تا {seconds_to_hms(ed)}")
     except Exception as e:
         await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nخطا در آپلود: {e}")
-        os.remove(inp)
-        os.remove(out)
+        os.remove(input_file)
+        os.remove(output_file)
         return
 
     await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nعملیات با موفقیت انجام شد!")
     try:
-        os.remove(inp)
-        os.remove(out)
+        os.remove(input_file)
+        os.remove(output_file)
     except OSError as e:
         await c.send_message(LOG_CHANNEL, f"خطا در حذف فایل‌ها: {e}")
 
