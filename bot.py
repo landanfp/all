@@ -66,17 +66,21 @@ async def cut_audio(c, q):
 async def recv_media(c, m: Message):
     u = m.from_user.id
     s = sessions.get(u)
+    print(f"Session state for user {u}: {s}")  # اضافه کردن برای بررسی وضعیت
     if not s: return
     st = s.get("state")
     if st not in ["VIDEO", "AUDIO"]:
         return  # اگر وضعیت VIDEO یا AUDIO نبود، پردازش نکن
+    is_video = m.video is not None
+    is_audio = m.audio is not None
+    if st == "VIDEO" and not is_video:
+        await m.reply("لطفا فایل ویدیو ارسال کنید.")
+        return
+    if st == "AUDIO" and not is_audio:
+        await m.reply("لطفا فایل صوتی ارسال کنید.")
+        return
     fn = (m.video or m.audio or m.document).file_name
     ext = fn.rsplit('.', 1)[-1].lower()
-    is_video = filters.video(m)
-    is_audio = filters.audio(m)
-    if st == "VIDEO" and not is_video or st == "AUDIO" and not is_audio:
-        await m.reply("لطفا فایل مطابق با گزینه انتخاب شده ارسال کنید.")
-        return
     if st == "VIDEO" and ext not in ["mp4", "mkv"] or st == "AUDIO" and ext not in ["mp3", "wav", "m4a", "ogg"]:
         await m.reply("این فرمت فایل پشتیبانی نمی‌شود")
         return
