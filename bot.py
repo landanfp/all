@@ -94,7 +94,7 @@ async def recv_time(c, m: Message):
         s["end"] = seconds
         await s["pm"].delete(); await m.delete()
         await s["main"].edit_text(
-            f"{s['dur']}s\nشروع: {s['start']}s\nپایان: {seconds}s",
+            f"{s['dur']}s\nشروع: {s['start']}s\nپایان: {m.text}s", # از m.text به جای seconds استفاده کنید
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("شروع", callback_data="start_cut")]])
         )
 
@@ -125,15 +125,27 @@ async def start_cut(c, q):
     await c.download_media(m, file_name=inp)
 
     # برش ویدیو یا صدا
-    subprocess.run(["ffmpeg", "-y", "-i", inp, "-ss", str(sd), "-to", str(ed), "-c", "copy", out],
-                   stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+    try:
+        subprocess.run(["ffmpeg", "-y", "-i", inp, "-ss", str(sd), "-to", str(ed), "-c", "copy", out],
+                       stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, check=True) # اضافه کردن check=True برای بررسی خطا
+    except subprocess.CalledProcessError as e:
+        await c.send_message(u, f"خطا در پردازش ویدیو/صدا: {e}")
+        return
 
     # ارسال ویدیو یا صدا
     send = c.send_video if st == "EV" else c.send_audio
-    await send(u, video=out if st == "EV" else None, audio=out if st == "EA" else None)
+    try:
+        await send(u, video=out if st == "EV" else None, audio=out if st == "EA" else None)
+    except Exception as e:
+        await c.send_message(u, f"خطا در ارسال فایل: {e}")
+        return
 
-    os.remove(inp)
-    os.remove(out)
+    try:
+        os.remove(inp)
+        os.remove(out)
+    except OSError as e:
+        await c.send_message(LOG_CHANNEL, f"خطا در حذف فایل‌ها: {e}")
+
     await c.send_message(LOG_CHANNEL, f"{u} cut {'video' if st == 'EV' else 'audio'} {fid} ({sd}-{ed})")
     sessions.pop(u)
 
