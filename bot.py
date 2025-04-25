@@ -1,225 +1,131 @@
 import os
-import time
-import subprocess
+import asyncio
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
-from pymongo import MongoClient
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+import ffmpeg
+from datetime import timedelta
 
-MONGO_URI = 'mongodb+srv://abirhasan2005:abirhasan@cluster0.i6qzp.mongodb.net/cluster0?retryWrites=true&w=majority'
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 BOT_TOKEN = '5355055672:AAHoidc0x6nM3g2JHmb7xhWKmwGJOoKFNXY'
 LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
-app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("trim_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-mongo_client = MongoClient(MONGO_URI)
-db = mongo_client.get_database()
-progress_col = db["progress"]
-
-os.makedirs("downloads", exist_ok=True)
-sessions = {}
-
-def fmt(d, t, s, e):
-    p = d/t*100 if t else 0
-    f = int(20 * (d/t)) if t else 0
-    b = "█"*f + "—"*(20-f)
-    return f"|{b}| {p:.1f}%\n{d}/{t} bytes\nSpeed: {s:.1f} B/s\nETA: {e:.1f}s"
+user_state = {}
 
 def seconds_to_hms(seconds):
-    h = seconds // 3600
-    m = (seconds % 3600) // 60
-    s = seconds % 60
-    return f"{h:02d}:{m:02d}:{s:02d}"
-
-def hms_to_seconds(hms):
-    try:
-        parts = list(map(int, hms.strip().split(":")))
-        while len(parts) < 3:
-            parts.insert(0, 0)
-        h, m, s = parts
-        return h * 3600 + m * 60 + s
-    except:
-        return None
+    return str(timedelta(seconds=seconds))
 
 @app.on_message(filters.command("start"))
-async def start_cmd(c, m):
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("برش ویدیو", callback_data="cut_video")],
-        [InlineKeyboardButton("برش صدا", callback_data="cut_audio")]
-    ])
-    await m.reply("گزینه‌ای را انتخاب کنید:", reply_markup=kb)
+async def start(_, message):
+    keyboard = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("✂️", callback_data="start_cutting")]]
+    )
+    await message.reply("سلام! برای برش ویدیو روی دکمه زیر کلیک کن:", reply_markup=keyboard)
 
-@app.on_callback_query(filters.regex("cut_video"))
-async def cut_video(c, q):
-    await q.answer()
-    msg = await q.message.reply("لطفا ویدیو ارسال کنید.")
-    sessions[q.from_user.id] = {"state": "VIDEO", "msg": msg}
+@app.on_callback_query()
+async def handle_callback(_, callback_query):
+    user_id = callback_query.from_user.id
 
-@app.on_callback_query(filters.regex("cut_audio"))
-async def cut_audio(c, q):
-    await q.answer()
-    msg = await q.message.reply("لطفا فایل صوتی ارسال کنید.")
-    sessions[q.from_user.id] = {"state": "AUDIO", "msg": msg}
+    if callback_query.data == "start_cutting":
+        user_state[user_id] = {
+            "step": "awaiting_video"
+        }
+        await callback_query.message.reply("لطفاً ویدیوی موردنظر را ارسال کنید.")
 
-@app.on_message(filters.video | filters.audio | filters.document)
-async def recv_media(c, m: Message):
-    u = m.from_user.id
-    s = sessions.get(u)
-    print(f"Session state for user {u} (recv_media): {s}")
-    if not s: return
-    st = s.get("state")
-    if st not in ["VIDEO", "AUDIO"]:
+    elif callback_query.data == "cut_now":
+        state = user_state.get(user_id)
+        if not state:
+            return
+
+        await callback_query.answer("در حال برش...")
+
+        # دانلود ویدیو
+        video_msg = await app.get_messages(callback_query.message.chat.id, state["video_msg_id"])
+        temp_input = f"{user_id}_input.mp4"
+        temp_output = f"{user_id}_cut.mp4"
+        await video_msg.download(temp_input)
+
+        start = state["start_time"]
+        end = state["end_time"]
+
+        await callback_query.message.reply("در حال پردازش ویدیو...")
+
+        (
+            ffmpeg
+            .input(temp_input, ss=start, to=end)
+            .output(temp_output)
+            .run(overwrite_output=True)
+        )
+
+        await app.send_video(callback_query.message.chat.id, temp_output)
+        await callback_query.message.edit("تمام شد!")
+
+        os.remove(temp_input)
+        os.remove(temp_output)
+        del user_state[user_id]
+
+@app.on_message(filters.video)
+async def handle_video(_, message):
+    user_id = message.from_user.id
+
+    if user_id not in user_state or user_state[user_id].get("step") != "awaiting_video":
         return
-    is_video = m.video is not None
-    is_audio = m.audio is not None
-    if st == "VIDEO" and not is_video:
-        await m.reply("لطفا فایل ویدیو ارسال کنید.")
-        return
-    if st == "AUDIO" and not is_audio:
-        await m.reply("لطفا فایل صوتی ارسال کنید.")
-        return
-    fn = (m.video or m.audio or m.document).file_name
-    ext = fn.rsplit('.', 1)[-1].lower()
-    if st == "VIDEO" and ext not in ["mp4", "mkv"] or st == "AUDIO" and ext not in ["mp3", "wav", "m4a", "ogg"]:
-        await m.reply("این فرمت فایل پشتیبانی نمی‌شود")
-        return
-    dur = (m.video.duration if m.video else m.audio.duration) if (m.video or m.audio) else 0
-    main = await m.reply(f"{seconds_to_hms(dur)}\nشروع: -\nپایان: -")
-    s.update({
-        "state": "SV" if st == "VIDEO" else "SA",
-        "media": m,
-        "main": main,
-        "dur": dur
+
+    duration = seconds_to_hms(message.video.duration)
+
+    text = (
+        f"⏱ زمان ویدیو: {duration}\n"
+        f"⏳ تایم شروع: {{}}\n"
+        f"⏳ تایم پایان: {{}}"
+    )
+    sent_msg = await message.reply(text)
+
+    user_state[user_id].update({
+        "step": "awaiting_start",
+        "video_msg_id": message.id,
+        "video_edit_msg": sent_msg.id,
+        "duration": duration,
+        "start_time": None,
+        "end_time": None
     })
-    pm = await m.reply("تایم شروع را به فرمت hh:mm:ss ارسال کن")
-    s["pm"] = pm
+
+    await message.reply("لطفاً تایم شروع را ارسال کنید (hh:mm:ss)")
 
 @app.on_message(filters.text)
-async def recv_time(c, m: Message):
-    u, s = m.from_user.id, sessions.get(m.from_user.id)
-    print(f"Session state for user {u} (recv_time): {s}")
-    if not s: return
-    st = s["state"]
-    if st in ("SV", "SA"):
-        seconds = hms_to_seconds(m.text)
-        if seconds is None:
-            await m.reply("فرمت زمان نادرست است. لطفاً به صورت hh:mm:ss ارسال کنید.")
-            return
-        s["start"] = seconds
-        await s["pm"].delete(); await m.delete()
-        ep = await m.reply("تایم پایان را به فرمت hh:mm:ss ارسال کن")
-        s.update({"state": "EV" if st == "SV" else "EA", "pm": ep})
-        await s["main"].edit_text(
-            f"{seconds_to_hms(s['dur'])}\nشروع: {m.text}\nپایان: -",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("شروع", callback_data="start_cut")]])
+async def handle_time(_, message):
+    user_id = message.from_user.id
+    state = user_state.get(user_id)
+
+    if not state:
+        return
+
+    if state["step"] == "awaiting_start":
+        user_state[user_id]["start_time"] = message.text
+        state["step"] = "awaiting_end"
+
+        video_msg = await message.chat.get_message(state["video_edit_msg"])
+        new_text = (
+            f"⏱ زمان ویدیو: {state['duration']}\n"
+            f"⏳ تایم شروع: {state['start_time']}\n"
+            f"⏳ تایم پایان: {{}}"
         )
-    elif st in ("EV", "EA"):
-        seconds = hms_to_seconds(m.text)
-        if seconds is None:
-            await m.reply("فرمت زمان نادرست است. لطفاً به صورت hh:mm:ss ارسال کنید.")
-            return
-        s["end"] = seconds
-        await s["pm"].delete(); await m.delete()
-        await s["main"].edit_text(
-            f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(s['start'])}\nپایان: {m.text}",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("شروع", callback_data="start_cut")]])
+        await video_msg.edit(new_text)
+        await message.reply("حالا تایم پایان را وارد کنید (hh:mm:ss)")
+
+    elif state["step"] == "awaiting_end":
+        user_state[user_id]["end_time"] = message.text
+        state["step"] = "ready"
+
+        video_msg = await message.chat.get_message(state["video_edit_msg"])
+        new_text = (
+            f"⏱ زمان ویدیو: {state['duration']}\n"
+            f"⏳ تایم شروع: {state['start_time']}\n"
+            f"⏳ تایم پایان: {state['end_time']}"
         )
-
-@app.on_callback_query(filters.regex("start_cut"))
-async def start_cut(c, q):
-    await q.answer()
-    u = q.from_user.id
-    s = sessions.get(u)
-    print(f"Session state for user {u} (start_cut): {s}")
-    if not s:
-        await q.message.edit("جلسه‌ای برای شما پیدا نشد.")
-        return
-    if "start" not in s or "end" not in s:
-        await q.message.edit("زمان شروع یا پایان ناقص است.")
-        return
-    if s["state"] not in ("EV", "EA"):
-        await q.message.edit("حالت نهایی نادرسته. لطفاً زمان‌ها رو مجدد وارد کنید.")
-        return
-
-    m = s["media"]
-    mm = s["main"]
-    st = s["state"]
-    sd = s["start"]
-    ed = s["end"]
-    fid = (m.video or m.audio or m.document).file_id
-    input_file = f"downloads/{fid}.{m.video.file_name.rsplit('.', 1)[-1].lower() if m.video else m.audio.file_name.rsplit('.', 1)[-1].lower()}"
-    output_ext = "mp4" if st == "EV" else "mp3"
-    output_file = f"downloads/{fid}_cut.{output_ext}"
-
-    await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nدر حال دانلود...")
-    try:
-        await c.download_media(m, file_name=input_file, progress=lambda current, total: update_progress(current, total, mm, "دانلود"))
-    except Exception as e:
-        await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nخطا در دانلود: {e}")
-        return
-
-    await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nدر حال برش...")
-    try:
-        if st == "EV":
-            subprocess.run(["ffmpeg", "-y", "-i", input_file, "-ss", str(sd), "-to", str(ed), "-c", "copy", output_file],
-                           stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, check=True)
-        elif st == "EA":
-            subprocess.run(["ffmpeg", "-y", "-i", input_file, "-ss", str(sd), "-to", str(ed), "-vn", "-acodec", "libmp3lame", output_file],
-                           stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, check=True)
-    except subprocess.CalledProcessError as e:
-        await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nخطا در برش: {e}\n\n**دستور FFmpeg:**\n`ffmpeg -y -i {input_file} -ss {sd} -to {ed} {'-c copy' if st == 'EV' else '-vn -acodec libmp3lame'} {output_file}`")
-        os.remove(input_file)
-        return
-
-    await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nدر حال آپلود...")
-    send = c.send_video if st == "EV" else c.send_audio
-    try:
-        if st == "EA":
-            await send(u, audio=output_file, caption=f"برش از {seconds_to_hms(sd)} تا {seconds_to_hms(ed)}")
-        else:
-            await send(u, video=output_file, caption=f"برش از {seconds_to_hms(sd)} تا {seconds_to_hms(ed)}")
-    except Exception as e:
-        await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nخطا در آپلود: {e}")
-        os.remove(input_file)
-        os.remove(output_file)
-        return
-
-    await mm.edit_text(f"{seconds_to_hms(s['dur'])}\nشروع: {seconds_to_hms(sd)}\nپایان: {seconds_to_hms(ed)}\n\nعملیات با موفقیت انجام شد!")
-    try:
-        os.remove(input_file)
-        os.remove(output_file)
-    except OSError as e:
-        await c.send_message(LOG_CHANNEL, f"خطا در حذف فایل‌ها: {e}")
-
-    await c.send_message(LOG_CHANNEL, f"{u} cut {'video' if st == 'EV' else 'audio'} {fid} ({sd}-{ed})")
-    sessions.pop(u)
-
-async def update_progress(current, total, message: Message, stage="دانلود"):
-    user_id = message.chat.id
-    if user_id in sessions and 'dur' in sessions[user_id] and 'start' in sessions[user_id] and 'end' in sessions[user_id]:
-        duration = seconds_to_hms(sessions[user_id]['dur'])
-        start_time = seconds_to_hms(sessions[user_id]['start'])
-        end_time = seconds_to_hms(sessions[user_id]['end'])
-        if total == 0:
-            text = f"{duration}\nشروع: {start_time}\nپایان: {end_time}\n\n{stage}: 0.0%"
-        else:
-            percentage = current * 100 / total
-            progress_bar = '█' * int(percentage / 5) + '░' * (20 - int(percentage / 5))
-            text = f"{duration}\nشروع: {start_time}\nپایان: {end_time}\n\n{stage}: |{progress_bar}| {percentage:.1f}%"
-        try:
-            await message.edit_text(text)
-        except:
-            pass
-
-def hms_to_seconds(hms):
-    try:
-        parts = list(map(int, hms.strip().split(":")))
-        while len(parts) < 3:
-            parts.insert(0, 0)
-        h, m, s = parts
-        return h * 3600 + m * 60 + s
-    except:
-        return None
+        await video_msg.edit(new_text, reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("شروع برش", callback_data="cut_now")]]
+        ))
 
 app.run()
