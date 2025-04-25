@@ -81,7 +81,7 @@ async def recv_time(c, m: Message):
         s["start"] = seconds
         await s["pm"].delete(); await m.delete()
         ep = await m.reply("تایم پایان را به فرمت hh:mm:ss ارسال کن")
-        s.update({"state": "EV" if st == "SV" else "EA", "pm": ep})
+        s.update({"state": "EV" if st == "VIDEO" else "EA", "pm": ep})
         await s["main"].edit_text(
             f"{s['dur']}s\nشروع: {m.text}\nپایان: -",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("شروع", callback_data="start_cut")]])
@@ -94,7 +94,7 @@ async def recv_time(c, m: Message):
         s["end"] = seconds
         await s["pm"].delete(); await m.delete()
         await s["main"].edit_text(
-            f"{s['dur']}s\nشروع: {s['start']}s\nپایان: {m.text}s", # از m.text به جای seconds استفاده کنید
+            f"{s['dur']}s\nشروع: {s['start']}s\nپایان: {m.text}s",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("شروع", callback_data="start_cut")]])
         )
 
@@ -115,31 +115,42 @@ async def start_cut(c, q):
 
     m = s["media"]
     mm = s["main"]
-    st, sd, ed = s["state"], s["start"], s["end"]
+    st = s["state"]
+    sd = s["start"]
+    ed = s["end"]
     fid = (m.video or m.audio or m.document).file_id
     ext = "mp4" if st == "EV" else "mp3"
     inp = f"downloads/{fid}.{ext}"
     out = f"downloads/{fid}_cut.{ext}"
 
-    # دانلود فایل
-    await c.download_media(m, file_name=inp)
+    await mm.edit_text("در حال دانلود...")
+    try:
+        await c.download_media(m, file_name=inp, progress=lambda current, total: update_progress(current, total, mm))
+    except Exception as e:
+        await mm.edit_text(f"خطا در دانلود: {e}")
+        return
 
-    # برش ویدیو یا صدا
+    await mm.edit_text("در حال برش...")
     try:
         subprocess.run(["ffmpeg", "-y", "-i", inp, "-ss", str(sd), "-to", str(ed), "-c", "copy", out],
-                       stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, check=True) # اضافه کردن check=True برای بررسی خطا
+                       stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, check=True)
     except subprocess.CalledProcessError as e:
-        await c.send_message(u, f"خطا در پردازش ویدیو/صدا: {e}")
+        await mm.edit_text(f"خطا در برش: {e}")
+        os.remove(inp)
         return
 
-    # ارسال ویدیو یا صدا
+    await mm.edit_text("در حال آپلود...")
     send = c.send_video if st == "EV" else c.send_audio
     try:
-        await send(u, video=out if st == "EV" else None, audio=out if st == "EA" else None)
+        await send(u, video=out if st == "EV" else None, audio=out if st == "EA" else None,
+                   progress=lambda current, total: update_progress(current, total, mm, "آپلود"))
     except Exception as e:
-        await c.send_message(u, f"خطا در ارسال فایل: {e}")
+        await mm.edit_text(f"خطا در آپلود: {e}")
+        os.remove(inp)
+        os.remove(out)
         return
 
+    await mm.edit_text("عملیات با موفقیت انجام شد!")
     try:
         os.remove(inp)
         os.remove(out)
@@ -148,6 +159,17 @@ async def start_cut(c, q):
 
     await c.send_message(LOG_CHANNEL, f"{u} cut {'video' if st == 'EV' else 'audio'} {fid} ({sd}-{ed})")
     sessions.pop(u)
+
+async def update_progress(current, total, message: Message, stage="دانلود"):
+    if total == 0:
+        return
+    percentage = current * 100 / total
+    progress_bar = '█' * int(percentage / 5) + '░' * (20 - int(percentage / 5))
+    text = f"{stage}: |{progress_bar}| {percentage:.1f}%"
+    try:
+        await message.edit_text(text)
+    except:
+        pass
 
 def hms_to_seconds(hms):
     try:
