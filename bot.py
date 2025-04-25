@@ -22,6 +22,8 @@ def extract_shortcode(url):
 async def send_profile_picture(username, message):
     try:
         L = Instaloader()
+        # برای دریافت اطلاعات پروفایل باید از login استفاده کرد
+        # در اینجا بدون ورود به حساب، به طور عمومی پروفایل را می‌خوانیم
         profile = Profile.from_username(L.context, username)
         profile_pic_url = profile.profile_pic_url
         await message.reply_photo(profile_pic_url)
