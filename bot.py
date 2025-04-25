@@ -2,7 +2,7 @@ import os
 import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-import ffmpeg
+#import ffmpeg
 from datetime import timedelta
 
 API_ID = '3335796'
