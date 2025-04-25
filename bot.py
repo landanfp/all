@@ -10,7 +10,7 @@ API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 BOT_TOKEN = '5355055672:AAHoidc0x6nM3g2JHmb7xhWKmwGJOoKFNXY'
 LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
-app = Client("trim_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 user_state = {}
 
@@ -102,27 +102,51 @@ async def handle_time(_, message):
         return
 
     if state["step"] == "awaiting_start":
-        user_state[user_id]["start_time"] = message.text
+        start_time = message.text
+        # بررسی فرمت تایم شروع (hh:mm:ss)
+        try:
+            h, m, s = map(int, start_time.split(":"))
+            start_seconds = h * 3600 + m * 60 + s
+            if start_seconds > state["video_duration"]:
+                await message.reply("تایم شروع نباید بیشتر از زمان ویدیو باشد.")
+                return
+        except ValueError:
+            await message.reply("فرمت تایم شروع اشتباه است. لطفاً به فرمت hh:mm:ss وارد کنید.")
+            return
+
+        user_state[user_id]["start_time"] = start_time
         state["step"] = "awaiting_end"
 
         video_msg = await message.chat.get_message(state["video_edit_msg"])
         new_text = (
             f"⏱ زمان ویدیو: {state['duration']}\n"
-            f"⏳ تایم شروع: {state['start_time']}\n"
+            f"⏳ تایم شروع: {start_time}\n"
             f"⏳ تایم پایان: {{}}"
         )
         await video_msg.edit(new_text)
         await message.reply("حالا تایم پایان را وارد کنید (hh:mm:ss)")
 
     elif state["step"] == "awaiting_end":
-        user_state[user_id]["end_time"] = message.text
+        end_time = message.text
+        # بررسی فرمت تایم پایان (hh:mm:ss)
+        try:
+            h, m, s = map(int, end_time.split(":"))
+            end_seconds = h * 3600 + m * 60 + s
+            if end_seconds > state["video_duration"]:
+                await message.reply("تایم پایان نباید بیشتر از زمان ویدیو باشد.")
+                return
+        except ValueError:
+            await message.reply("فرمت تایم پایان اشتباه است. لطفاً به فرمت hh:mm:ss وارد کنید.")
+            return
+
+        user_state[user_id]["end_time"] = end_time
         state["step"] = "ready"
 
         video_msg = await message.chat.get_message(state["video_edit_msg"])
         new_text = (
             f"⏱ زمان ویدیو: {state['duration']}\n"
             f"⏳ تایم شروع: {state['start_time']}\n"
-            f"⏳ تایم پایان: {state['end_time']}"
+            f"⏳ تایم پایان: {end_time}"
         )
         await video_msg.edit(new_text, reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton("شروع برش", callback_data="cut_now")]]
