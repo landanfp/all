@@ -2,6 +2,7 @@
 pyrogram==2.0.106
 tgcrypto 
 pillow
+instaloader
 aiofiles
 aiohttp
 pymongo[srv]
@@ -10,5 +11,4 @@ python-dotenv
 uvicorn
 fastapi
 flask
-pydub
 
