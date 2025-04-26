@@ -89,8 +89,13 @@ async def handle_callback(_, callback_query):
                     del user_state[user_id]
                     return
 
-                await app.send_video(callback_query.message.chat.id, temp_output)
-                await callback_query.message.edit("برش ویدیو با موفقیت انجام شد!")
+                await callback_query.message.edit("در حال آپلود...")
+                try:
+                    await app.send_video(callback_query.message.chat.id, temp_output)
+                    await callback_query.message.edit("برش ویدیو با موفقیت انجام شد!")
+                except Exception as e:
+                    print(f"Error sending video: {e}")
+                    await callback_query.message.reply("متاسفانه در هنگام آپلود ویدیو مشکلی پیش آمد.")
 
                 os.remove(temp_input)
                 os.remove(temp_output)
