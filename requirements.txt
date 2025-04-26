@@ -1,6 +1,7 @@
 
 pyrogram==2.0.106
 tgcrypto 
+ffmpeg-python
 pillow
 aiofiles
 aiohttp
