@@ -2,7 +2,7 @@ import os
 import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-#import ffmpeg
+import ffmpeg
 from datetime import timedelta
 
 API_ID = '3335796'
@@ -20,9 +20,9 @@ def seconds_to_hms(seconds):
 @app.on_message(filters.command("start"))
 async def start(_, message):
     keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("✂️", callback_data="start_cutting")]]
+        [[InlineKeyboardButton("✂️ برش ویدیو", callback_data="start_cutting")]]
     )
-    await message.reply("سلام! برای برش ویدیو روی دکمه زیر کلیک کن:", reply_markup=keyboard)
+    await message.reply("سلام! برای برش ویدیو روی دکمه زیر کلیک کنید:", reply_markup=keyboard)
 
 @app.on_callback_query()
 async def handle_callback(_, callback_query):
@@ -52,15 +52,24 @@ async def handle_callback(_, callback_query):
 
         await callback_query.message.reply("در حال پردازش ویدیو...")
 
-        (
-            ffmpeg
-            .input(temp_input, ss=start, to=end)
-            .output(temp_output)
-            .run(overwrite_output=True)
+        try:
+            (
+                ffmpeg
+                .input(temp_input, ss=start, to=end)
+                .output(temp_output)
+                .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
         )
+        except ffmpeg.Error as e:
+            print(f"FFmpeg error: {e.stderr.decode('utf8')}")
+            await callback_query.message.reply("متاسفانه در هنگام برش ویدیو مشکلی پیش آمد.")
+            os.remove(temp_input)
+            if os.path.exists(temp_output):
+                os.remove(temp_output)
+            del user_state[user_id]
+            return
 
         await app.send_video(callback_query.message.chat.id, temp_output)
-        await callback_query.message.edit("تمام شد!")
+        await callback_query.message.edit("برش ویدیو با موفقیت انجام شد!")
 
         os.remove(temp_input)
         os.remove(temp_output)
@@ -73,10 +82,11 @@ async def handle_video(_, message):
     if user_id not in user_state or user_state[user_id].get("step") != "awaiting_video":
         return
 
-    duration = seconds_to_hms(message.video.duration)
+    duration_seconds = message.video.duration
+    duration_hms = seconds_to_hms(duration_seconds)
 
     text = (
-        f"⏱ زمان ویدیو: {duration}\n"
+        f"⏱ زمان ویدیو: {duration_hms}\n"
         f"⏳ تایم شروع: {{}}\n"
         f"⏳ تایم پایان: {{}}"
     )
@@ -86,12 +96,13 @@ async def handle_video(_, message):
         "step": "awaiting_start",
         "video_msg_id": message.id,
         "video_edit_msg": sent_msg.id,
-        "duration": duration,
+        "video_duration": duration_seconds,
+        "duration_hms": duration_hms,
         "start_time": None,
         "end_time": None
     })
 
-    await message.reply("لطفاً تایم شروع را ارسال کنید (hh:mm:ss)")
+    await message.reply("لطفاً تایم شروع را به فرمت `hh:mm:ss` وارد کنید.")
 
 @app.on_message(filters.text)
 async def handle_time(_, message):
@@ -103,15 +114,14 @@ async def handle_time(_, message):
 
     if state["step"] == "awaiting_start":
         start_time = message.text
-        # بررسی فرمت تایم شروع (hh:mm:ss)
         try:
             h, m, s = map(int, start_time.split(":"))
             start_seconds = h * 3600 + m * 60 + s
             if start_seconds > state["video_duration"]:
-                await message.reply("تایم شروع نباید بیشتر از زمان ویدیو باشد.")
+                await message.reply("⚠️ تایم شروع نباید بیشتر از زمان کل ویدیو باشد.")
                 return
         except ValueError:
-            await message.reply("فرمت تایم شروع اشتباه است. لطفاً به فرمت hh:mm:ss وارد کنید.")
+            await message.reply("⚠️ فرمت تایم شروع اشتباه است. لطفاً به فرمت `hh:mm:ss` وارد کنید.")
             return
 
         user_state[user_id]["start_time"] = start_time
@@ -119,24 +129,29 @@ async def handle_time(_, message):
 
         video_msg = await message.chat.get_message(state["video_edit_msg"])
         new_text = (
-            f"⏱ زمان ویدیو: {state['duration']}\n"
+            f"⏱ زمان ویدیو: {state['duration_hms']}\n"
             f"⏳ تایم شروع: {start_time}\n"
             f"⏳ تایم پایان: {{}}"
         )
         await video_msg.edit(new_text)
-        await message.reply("حالا تایم پایان را وارد کنید (hh:mm:ss)")
+        await message.reply("حالا تایم پایان را به فرمت `hh:mm:ss` وارد کنید.")
 
     elif state["step"] == "awaiting_end":
         end_time = message.text
-        # بررسی فرمت تایم پایان (hh:mm:ss)
         try:
             h, m, s = map(int, end_time.split(":"))
             end_seconds = h * 3600 + m * 60 + s
             if end_seconds > state["video_duration"]:
-                await message.reply("تایم پایان نباید بیشتر از زمان ویدیو باشد.")
+                await message.reply("⚠️ تایم پایان نباید بیشتر از زمان کل ویدیو باشد.")
                 return
+            if state["start_time"]:
+                start_h, start_m, start_s = map(int, state["start_time"].split(":"))
+                start_total_seconds = start_h * 3600 + start_m * 60 + start_s
+                if end_seconds <= start_total_seconds:
+                    await message.reply("⚠️ تایم پایان نباید قبل یا مساوی تایم شروع باشد.")
+                    return
         except ValueError:
-            await message.reply("فرمت تایم پایان اشتباه است. لطفاً به فرمت hh:mm:ss وارد کنید.")
+            await message.reply("⚠️ فرمت تایم پایان اشتباه است. لطفاً به فرمت `hh:mm:ss` وارد کنید.")
             return
 
         user_state[user_id]["end_time"] = end_time
@@ -144,12 +159,12 @@ async def handle_time(_, message):
 
         video_msg = await message.chat.get_message(state["video_edit_msg"])
         new_text = (
-            f"⏱ زمان ویدیو: {state['duration']}\n"
+            f"⏱ زمان ویدیو: {state['duration_hms']}\n"
             f"⏳ تایم شروع: {state['start_time']}\n"
             f"⏳ تایم پایان: {end_time}"
         )
         await video_msg.edit(new_text, reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("شروع برش", callback_data="cut_now")]]
+            [[InlineKeyboardButton("✅ شروع برش", callback_data="cut_now")]]
         ))
 
 app.run()
