@@ -4,10 +4,11 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import ffmpeg
 from datetime import timedelta
+import time  # اضافه کردن ماژول time
 
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '1396293494:AAE6YAY-Vog3QPvSNCo8x80FsIue9FJGWh8'
+BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
 LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
 app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -57,9 +58,20 @@ async def handle_callback(_, callback_query):
             return
 
         if not os.path.exists(temp_input):
-            print(f"فایل ورودی پیدا نشد: {temp_input}")
+            print(f"فایل ورودی بلافاصله بعد از دانلود پیدا نشد: {temp_input}")
             await callback_query.message.reply("متاسفانه فایل ویدیوی ورودی پیدا نشد.")
             return
+        else:
+            print(f"فایل ورودی بلافاصله بعد از دانلود پیدا شد: {temp_input}")
+
+        await asyncio.sleep(3)  # افزودن تأخیر 3 ثانیه (فقط برای تست)
+
+        if not os.path.exists(temp_input):
+            print(f"فایل ورودی بعد از تأخیر پیدا نشد: {temp_input}")
+            await callback_query.message.reply("متاسفانه فایل ویدیوی ورودی پیدا نشد.")
+            return
+        else:
+            print(f"فایل ورودی بعد از تأخیر پیدا شد: {temp_input}")
 
         start = state["start_time"]
         end = state["end_time"]
