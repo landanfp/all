@@ -48,10 +48,17 @@ async def handle_callback(_, callback_query):
         temp_input = f"{user_id}_input.mp4"
         temp_output = f"{user_id}_cut.mp4"
         try:
+            print(f"در حال دانلود ویدیو به: {temp_input}")
             await video_msg.download(temp_input)
+            print(f"دانلود ویدیو به پایان رسید.")
         except Exception as e:
             print(f"Error downloading video: {e}")
             await callback_query.message.reply("متاسفانه در دانلود ویدیو مشکلی پیش آمد.")
+            return
+
+        if not os.path.exists(temp_input):
+            print(f"فایل ورودی پیدا نشد: {temp_input}")
+            await callback_query.message.reply("متاسفانه فایل ویدیوی ورودی پیدا نشد.")
             return
 
         start = state["start_time"]
@@ -60,15 +67,17 @@ async def handle_callback(_, callback_query):
         await callback_query.message.reply("در حال پردازش ویدیو...")
 
         try:
+            print(f"در حال اجرای FFmpeg با ورودی: {temp_input}، شروع: {start}، پایان: {end}، خروجی: {temp_output}")
             (
                 ffmpeg
                 .input(temp_input, ss=start, to=end)
                 .output(temp_output)
                 .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
             )
+            print(f"پردازش FFmpeg به پایان رسید.")
         except ffmpeg.Error as e:
             print(f"FFmpeg error: {e.stderr.decode('utf8')}")
-            await callback_query.message.reply("متاسفانه در هنگام برش ویدیو مشکلی پیش آمد.")
+            await callback_query.message.reply(f"متاسفانه در هنگام برش ویدیو مشکلی پیش آمد:\n{e.stderr.decode('utf8')}")
             os.remove(temp_input)
             if os.path.exists(temp_output):
                 os.remove(temp_output)
@@ -76,7 +85,7 @@ async def handle_callback(_, callback_query):
             return
         except Exception as e:
             print(f"General error during processing: {e}")
-            await callback_query.message.reply("متاسفانه در هنگام پردازش ویدیو مشکلی پیش آمد.")
+            await callback_query.message.reply(f"متاسفانه در هنگام پردازش ویدیو مشکلی پیش آمد:\n{e}")
             os.remove(temp_input)
             if os.path.exists(temp_output):
                 os.remove(temp_output)
@@ -116,7 +125,7 @@ async def handle_video(_, message):
         "duration_hms": duration_hms,
         "start_time": None,
         "end_time": None,
-        "start_prompt_id": sent_start_prompt.id  # ذخیره ID پیام راهنمایی شروع
+        "start_prompt_id": sent_start_prompt.id
     })
 
 @app.on_message(filters.text)
@@ -151,9 +160,9 @@ async def handle_time(_, message):
                 f"⏳ تایم پایان: {{}}"
             )
             await video_msg.edit(new_text)
-            await app.delete_messages(message.chat.id, state["start_prompt_id"]) # حذف پیام راهنمایی شروع
+            await app.delete_messages(message.chat.id, state["start_prompt_id"])
             sent_end_prompt = await message.reply("حالا تایم پایان را به فرمت `hh:mm:ss` وارد کنید.")
-            user_state[user_id]["end_prompt_id"] = sent_end_prompt.id # ذخیره ID پیام راهنمایی پایان
+            user_state[user_id]["end_prompt_id"] = sent_end_prompt.id
         except Exception as e:
             print(f"Error editing/deleting message: {e}")
             await message.reply("متاسفانه در به‌روزرسانی/حذف پیام مشکلی پیش آمد. لطفاً تایم پایان را وارد کنید.")
@@ -190,7 +199,7 @@ async def handle_time(_, message):
             await video_msg.edit(new_text, reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("✅ شروع برش", callback_data="cut_now")]]
             ))
-            await app.delete_messages(message.chat.id, state["end_prompt_id"]) # حذف پیام راهنمایی پایان
+            await app.delete_messages(message.chat.id, state["end_prompt_id"])
         except Exception as e:
             print(f"Error editing/deleting message: {e}")
             await message.reply("متاسفانه در به‌روزرسانی/حذف پیام مشکلی پیش آمد. لطفاً مجدداً تلاش کنید.")
