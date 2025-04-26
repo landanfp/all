@@ -4,7 +4,7 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import ffmpeg
 from datetime import timedelta
-import time  # اضافه کردن ماژول time
+import tempfile
 
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
@@ -46,70 +46,55 @@ async def handle_callback(_, callback_query):
         await callback_query.answer("در حال برش...")
 
         video_msg = await app.get_messages(callback_query.message.chat.id, state["video_msg_id"])
-        temp_input = f"{user_id}_input.mp4"
-        temp_output = f"{user_id}_cut.mp4"
-        try:
-            print(f"در حال دانلود ویدیو به: {temp_input}")
-            await video_msg.download(temp_input)
-            print(f"دانلود ویدیو به پایان رسید.")
-        except Exception as e:
-            print(f"Error downloading video: {e}")
-            await callback_query.message.reply("متاسفانه در دانلود ویدیو مشکلی پیش آمد.")
-            return
 
-        if not os.path.exists(temp_input):
-            print(f"فایل ورودی بلافاصله بعد از دانلود پیدا نشد: {temp_input}")
-            await callback_query.message.reply("متاسفانه فایل ویدیوی ورودی پیدا نشد.")
-            return
-        else:
-            print(f"فایل ورودی بلافاصله بعد از دانلود پیدا شد: {temp_input}")
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_input_file:
+            temp_input = tmp_input_file.name
+            try:
+                print(f"در حال دانلود ویدیو به: {temp_input}")
+                await video_msg.download(temp_input)
+                print(f"دانلود ویدیو به پایان رسید.")
+            except Exception as e:
+                print(f"Error downloading video: {e}")
+                await callback_query.message.reply("متاسفانه در دانلود ویدیو مشکلی پیش آمد.")
+                return
 
-        await asyncio.sleep(3)  # افزودن تأخیر 3 ثانیه (فقط برای تست)
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_output_file:
+                temp_output = tmp_output_file.name
+                start = state["start_time"]
+                end = state["end_time"]
 
-        if not os.path.exists(temp_input):
-            print(f"فایل ورودی بعد از تأخیر پیدا نشد: {temp_input}")
-            await callback_query.message.reply("متاسفانه فایل ویدیوی ورودی پیدا نشد.")
-            return
-        else:
-            print(f"فایل ورودی بعد از تأخیر پیدا شد: {temp_input}")
+                await callback_query.message.reply("در حال پردازش ویدیو...")
 
-        start = state["start_time"]
-        end = state["end_time"]
+                try:
+                    print(f"در حال اجرای FFmpeg با ورودی: {temp_input}، شروع: {start}، پایان: {end}، خروجی: {temp_output}")
+                    (
+                        ffmpeg
+                        .input(temp_input, ss=start, to=end)
+                        .output(temp_output)
+                        .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
+                    )
+                    print(f"پردازش FFmpeg به پایان رسید.")
+                except ffmpeg.Error as e:
+                    print(f"FFmpeg error: {e.stderr.decode('utf8')}")
+                    await callback_query.message.reply(f"متاسفانه در هنگام برش ویدیو مشکلی پیش آمد:\n{e.stderr.decode('utf8')}")
+                    os.remove(temp_input)
+                    os.remove(temp_output)
+                    del user_state[user_id]
+                    return
+                except Exception as e:
+                    print(f"General error during processing: {e}")
+                    await callback_query.message.reply(f"متاسفانه در هنگام پردازش ویدیو مشکلی پیش آمد:\n{e}")
+                    os.remove(temp_input)
+                    os.remove(temp_output)
+                    del user_state[user_id]
+                    return
 
-        await callback_query.message.reply("در حال پردازش ویدیو...")
+                await app.send_video(callback_query.message.chat.id, temp_output)
+                await callback_query.message.edit("برش ویدیو با موفقیت انجام شد!")
 
-        try:
-            print(f"در حال اجرای FFmpeg با ورودی: {temp_input}، شروع: {start}، پایان: {end}، خروجی: {temp_output}")
-            (
-                ffmpeg
-                .input(temp_input, ss=start, to=end)
-                .output(temp_output)
-                .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
-            )
-            print(f"پردازش FFmpeg به پایان رسید.")
-        except ffmpeg.Error as e:
-            print(f"FFmpeg error: {e.stderr.decode('utf8')}")
-            await callback_query.message.reply(f"متاسفانه در هنگام برش ویدیو مشکلی پیش آمد:\n{e.stderr.decode('utf8')}")
-            os.remove(temp_input)
-            if os.path.exists(temp_output):
+                os.remove(temp_input)
                 os.remove(temp_output)
-            del user_state[user_id]
-            return
-        except Exception as e:
-            print(f"General error during processing: {e}")
-            await callback_query.message.reply(f"متاسفانه در هنگام پردازش ویدیو مشکلی پیش آمد:\n{e}")
-            os.remove(temp_input)
-            if os.path.exists(temp_output):
-                os.remove(temp_output)
-            del user_state[user_id]
-            return
-
-        await app.send_video(callback_query.message.chat.id, temp_output)
-        await callback_query.message.edit("برش ویدیو با موفقیت انجام شد!")
-
-        os.remove(temp_input)
-        os.remove(temp_output)
-        del user_state[user_id]
+                del user_state[user_id]
 
 @app.on_message(filters.video)
 async def handle_video(_, message):
