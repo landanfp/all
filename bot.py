@@ -15,7 +15,10 @@ app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TO
 user_state = {}
 
 def seconds_to_hms(seconds):
-    return str(timedelta(seconds=seconds))
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    return "{:02d}:{:02d}:{:02d}".format(hours, minutes, secs)
 
 @app.on_message(filters.command("start"))
 async def start(_, message):
@@ -41,7 +44,6 @@ async def handle_callback(_, callback_query):
 
         await callback_query.answer("در حال برش...")
 
-        # دانلود ویدیو
         video_msg = await app.get_messages(callback_query.message.chat.id, state["video_msg_id"])
         temp_input = f"{user_id}_input.mp4"
         temp_output = f"{user_id}_cut.mp4"
@@ -119,13 +121,14 @@ async def handle_video(_, message):
 
 @app.on_message(filters.text)
 async def handle_time(_, message):
+    print(f"پیام متنی دریافت شد: {message.text}, از کاربر: {message.from_user.id}")
     user_id = message.from_user.id
     state = user_state.get(user_id)
-
+    print(f"وضعیت کاربر {user_id}: {state}")
     if not state:
         return
-
-    if state["step"] == "awaiting_start":
+    if state.get("step") == "awaiting_start":
+        print("وارد بخش awaiting_start شد.")
         start_time = message.text
         try:
             h, m, s = map(int, start_time.split(":"))
@@ -140,13 +143,13 @@ async def handle_time(_, message):
         user_state[user_id]["start_time"] = start_time
         state["step"] = "awaiting_end"
 
-        video_msg = await message.chat.get_message(state["video_edit_msg"])
-        new_text = (
-            f"⏱ زمان ویدیو: {state['duration_hms']}\n"
-            f"⏳ تایم شروع: {start_time}\n"
-            f"⏳ تایم پایان: {{}}"
-        )
         try:
+            video_msg = await app.get_messages(message.chat.id, state["video_edit_msg"])
+            new_text = (
+                f"⏱ زمان ویدیو: {state['duration_hms']}\n"
+                f"⏳ تایم شروع: {start_time}\n"
+                f"⏳ تایم پایان: {{}}"
+            )
             await video_msg.edit(new_text)
             await message.reply("حالا تایم پایان را به فرمت `hh:mm:ss` وارد کنید.")
         except Exception as e:
@@ -175,13 +178,13 @@ async def handle_time(_, message):
         user_state[user_id]["end_time"] = end_time
         state["step"] = "ready"
 
-        video_msg = await message.chat.get_message(state["video_edit_msg"])
-        new_text = (
-            f"⏱ زمان ویدیو: {state['duration_hms']}\n"
-            f"⏳ تایم شروع: {state['start_time']}\n"
-            f"⏳ تایم پایان: {end_time}"
-        )
         try:
+            video_msg = await app.get_messages(message.chat.id, state["video_edit_msg"])
+            new_text = (
+                f"⏱ زمان ویدیو: {state['duration_hms']}\n"
+                f"⏳ تایم شروع: {state['start_time']}\n"
+                f"⏳ تایم پایان: {end_time}"
+            )
             await video_msg.edit(new_text, reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("✅ شروع برش", callback_data="cut_now")]]
             ))
