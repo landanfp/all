@@ -45,7 +45,12 @@ async def handle_callback(_, callback_query):
         video_msg = await app.get_messages(callback_query.message.chat.id, state["video_msg_id"])
         temp_input = f"{user_id}_input.mp4"
         temp_output = f"{user_id}_cut.mp4"
-        await video_msg.download(temp_input)
+        try:
+            await video_msg.download(temp_input)
+        except Exception as e:
+            print(f"Error downloading video: {e}")
+            await callback_query.message.reply("متاسفانه در دانلود ویدیو مشکلی پیش آمد.")
+            return
 
         start = state["start_time"]
         end = state["end_time"]
@@ -58,10 +63,18 @@ async def handle_callback(_, callback_query):
                 .input(temp_input, ss=start, to=end)
                 .output(temp_output)
                 .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
-        )
+            )
         except ffmpeg.Error as e:
             print(f"FFmpeg error: {e.stderr.decode('utf8')}")
             await callback_query.message.reply("متاسفانه در هنگام برش ویدیو مشکلی پیش آمد.")
+            os.remove(temp_input)
+            if os.path.exists(temp_output):
+                os.remove(temp_output)
+            del user_state[user_id]
+            return
+        except Exception as e:
+            print(f"General error during processing: {e}")
+            await callback_query.message.reply("متاسفانه در هنگام پردازش ویدیو مشکلی پیش آمد.")
             os.remove(temp_input)
             if os.path.exists(temp_output):
                 os.remove(temp_output)
@@ -133,8 +146,13 @@ async def handle_time(_, message):
             f"⏳ تایم شروع: {start_time}\n"
             f"⏳ تایم پایان: {{}}"
         )
-        await video_msg.edit(new_text)
-        await message.reply("حالا تایم پایان را به فرمت `hh:mm:ss` وارد کنید.")
+        try:
+            await video_msg.edit(new_text)
+            await message.reply("حالا تایم پایان را به فرمت `hh:mm:ss` وارد کنید.")
+        except Exception as e:
+            print(f"Error editing message: {e}")
+            await message.reply("متاسفانه در به‌روزرسانی پیام مشکلی پیش آمد. لطفاً تایم پایان را وارد کنید.")
+
 
     elif state["step"] == "awaiting_end":
         end_time = message.text
@@ -163,8 +181,12 @@ async def handle_time(_, message):
             f"⏳ تایم شروع: {state['start_time']}\n"
             f"⏳ تایم پایان: {end_time}"
         )
-        await video_msg.edit(new_text, reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("✅ شروع برش", callback_data="cut_now")]]
-        ))
+        try:
+            await video_msg.edit(new_text, reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("✅ شروع برش", callback_data="cut_now")]]
+            ))
+        except Exception as e:
+            print(f"Error editing message: {e}")
+            await message.reply("متاسفانه در به‌روزرسانی پیام مشکلی پیش آمد. لطفاً مجدداً تلاش کنید.")
 
 app.run()
