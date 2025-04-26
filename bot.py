@@ -106,6 +106,7 @@ async def handle_video(_, message):
         f"⏳ تایم پایان: {{}}"
     )
     sent_msg = await message.reply(text)
+    sent_start_prompt = await message.reply("لطفاً تایم شروع را به فرمت `hh:mm:ss` وارد کنید.")
 
     user_state[user_id].update({
         "step": "awaiting_start",
@@ -114,10 +115,9 @@ async def handle_video(_, message):
         "video_duration": duration_seconds,
         "duration_hms": duration_hms,
         "start_time": None,
-        "end_time": None
+        "end_time": None,
+        "start_prompt_id": sent_start_prompt.id  # ذخیره ID پیام راهنمایی شروع
     })
-
-    await message.reply("لطفاً تایم شروع را به فرمت `hh:mm:ss` وارد کنید.")
 
 @app.on_message(filters.text)
 async def handle_time(_, message):
@@ -151,10 +151,12 @@ async def handle_time(_, message):
                 f"⏳ تایم پایان: {{}}"
             )
             await video_msg.edit(new_text)
-            await message.reply("حالا تایم پایان را به فرمت `hh:mm:ss` وارد کنید.")
+            await app.delete_messages(message.chat.id, state["start_prompt_id"]) # حذف پیام راهنمایی شروع
+            sent_end_prompt = await message.reply("حالا تایم پایان را به فرمت `hh:mm:ss` وارد کنید.")
+            user_state[user_id]["end_prompt_id"] = sent_end_prompt.id # ذخیره ID پیام راهنمایی پایان
         except Exception as e:
-            print(f"Error editing message: {e}")
-            await message.reply("متاسفانه در به‌روزرسانی پیام مشکلی پیش آمد. لطفاً تایم پایان را وارد کنید.")
+            print(f"Error editing/deleting message: {e}")
+            await message.reply("متاسفانه در به‌روزرسانی/حذف پیام مشکلی پیش آمد. لطفاً تایم پایان را وارد کنید.")
 
 
     elif state["step"] == "awaiting_end":
@@ -188,8 +190,9 @@ async def handle_time(_, message):
             await video_msg.edit(new_text, reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("✅ شروع برش", callback_data="cut_now")]]
             ))
+            await app.delete_messages(message.chat.id, state["end_prompt_id"]) # حذف پیام راهنمایی پایان
         except Exception as e:
-            print(f"Error editing message: {e}")
-            await message.reply("متاسفانه در به‌روزرسانی پیام مشکلی پیش آمد. لطفاً مجدداً تلاش کنید.")
+            print(f"Error editing/deleting message: {e}")
+            await message.reply("متاسفانه در به‌روزرسانی/حذف پیام مشکلی پیش آمد. لطفاً مجدداً تلاش کنید.")
 
 app.run()
