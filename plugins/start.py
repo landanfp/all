@@ -1,5 +1,6 @@
-from pyrogram import Client, filters
+from loader import app
+from pyrogram import filters
 
-@Client.on_message(filters.command("start"))
-async def start(client, message):
-    await message.reply_text("سلام! ویدیوت رو بفرست و زیرنویس .srt رو هم بفرست تا بچسبونم.")
+@app.on_message(filters.command("start"))
+async def start_command(client, message):
+    await message.reply_text("سلام! خوش اومدی.")
