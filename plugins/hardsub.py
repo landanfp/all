@@ -54,7 +54,7 @@ async def handle_video_file(client, message: Message):
         output_path = f"hardsub_{user_id}.mp4"
 
         # اجرای ffmpeg برای چسباندن زیرنویس
-        ffmpeg_cmd = f'ffmpeg -i "{video_path}" -vf subtitles="{srt_path}" "{output_path}" -y'
+        ffmpeg_cmd = f'ffmpeg -i "{video_path}" -vf subtitles="{srt_path}" -c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k "{output_path}" -y'
         subprocess.run(ffmpeg_cmd, shell=True)
 
         # ارسال ویدیو نهایی
