@@ -8,7 +8,7 @@ import time
 user_sessions = {}
 SESSION_TIMEOUT = 300  # ۵ دقیقه = ۳۰۰ ثانیه
 
-@Client.on_message(filters.document & filters.private)
+@app.on_message(filters.document & filters.private)
 async def handle_srt_file(client, message: Message):
     if message.document.mime_type == "application/x-subrip" or message.document.file_name.endswith(".srt"):
         user_id = message.from_user.id
@@ -31,7 +31,7 @@ async def expire_session(user_id):
     if session and (time.time() - session['timestamp'] >= SESSION_TIMEOUT):
         user_sessions.pop(user_id, None)
 
-@Client.on_message(filters.video & filters.private)
+@app.on_message(filters.video & filters.private)
 async def handle_video_file(client, message: Message):
     user_id = message.from_user.id
 
