@@ -4,7 +4,7 @@ import os
 from helper.ffmpeg import add_hardsub
 from helper.progress import progress_bar
 
-@Client.on_message(filters.video)
+@app.on_message(filters.video)
 async def process_video(client, message):
     if message.video.file_size > 300 * 1024 * 1024:
         await message.reply_text("حجم ویدیو بیش از حد مجازه! (حداکثر 300MB)")
