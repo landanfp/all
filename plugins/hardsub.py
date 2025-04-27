@@ -1,27 +1,28 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
+from loader import app
 import asyncio
 import time
 import subprocess
 import os
 
-# دیکشنری برای ذخیره وضعیت کاربران
+# ذخیره وضعیت کاربران
 user_sessions = {}
-SESSION_TIMEOUT = 300  # زمان انقضا: ۵ دقیقه
+SESSION_TIMEOUT = 300  # ۵ دقیقه
 
-@Client.on_message(filters.document & filters.private)
+@app.on_message(filters.document & filters.private)
 async def handle_srt_file(client, message: Message):
     if message.document.mime_type == "application/x-subrip" or message.document.file_name.endswith(".srt"):
         user_id = message.from_user.id
         now = time.time()
 
-        # ذخیره فایل SRT همراه با زمان
+        # ذخیره اطلاعات فایل srt
         user_sessions[user_id] = {
             'srt_file_id': message.document.file_id,
             'timestamp': now
         }
 
-        await message.reply_text("✅ فایل زیرنویس دریافت شد. حالا لطفاً ویدیو را ارسال کنید.")
+        await message.reply_text("✅ فایل زیرنویس دریافت شد. حالا لطفاً ویدیوی خود را ارسال کنید.")
 
         # شروع شمارش معکوس برای انقضای سشن
         asyncio.create_task(expire_session(user_id))
@@ -32,7 +33,7 @@ async def expire_session(user_id):
     if session and (time.time() - session['timestamp'] >= SESSION_TIMEOUT):
         user_sessions.pop(user_id, None)
 
-@Client.on_message(filters.video & filters.private)
+@app.on_message(filters.video & filters.private)
 async def handle_video_file(client, message: Message):
     user_id = message.from_user.id
 
@@ -40,7 +41,8 @@ async def handle_video_file(client, message: Message):
         await message.reply_text("⚠️ ابتدا باید فایل زیرنویس (.srt) را ارسال کنید.")
         return
 
-    await message.reply_text("⏳ در حال دانلود فایل‌ها و پردازش... لطفاً صبور باشید.")
+    # اول پیام "در حال دانلود" بده
+    processing_msg = await message.reply_text("⏳ در حال دانلود فایل‌ها و پردازش... لطفاً صبر کنید.")
 
     try:
         srt_file_id = user_sessions[user_id]['srt_file_id']
@@ -51,21 +53,24 @@ async def handle_video_file(client, message: Message):
 
         output_path = f"hardsub_{user_id}.mp4"
 
-        # اجرای ffmpeg برای هاردساب
+        # اجرای ffmpeg برای چسباندن زیرنویس
         ffmpeg_cmd = f'ffmpeg -i "{video_path}" -vf subtitles="{srt_path}" "{output_path}" -y'
         subprocess.run(ffmpeg_cmd, shell=True)
 
-        # ارسال ویدیو هاردساب شده برای کاربر
+        # ارسال ویدیو نهایی
         await message.reply_video(
             video=output_path,
             caption="✅ ویدیو با زیرنویس اضافه شده آماده است!"
         )
 
+        # حذف پیام "در حال دانلود"
+        await processing_msg.delete()
+
     except Exception as e:
-        await message.reply_text(f"❌ خطایی رخ داد: {e}")
+        await processing_msg.edit_text(f"❌ خطایی رخ داد: {e}")
 
     finally:
-        # پاکسازی فایل‌ها و وضعیت
+        # پاکسازی فایل‌ها
         user_sessions.pop(user_id, None)
 
         try:
@@ -76,4 +81,4 @@ async def handle_video_file(client, message: Message):
             if os.path.exists(output_path):
                 os.remove(output_path)
         except Exception as e:
-            print(f"خطا در حذف فایل‌ها: {e}")
+            print(f"خطا در پاکسازی فایل‌ها: {e}")
