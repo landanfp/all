@@ -2,6 +2,7 @@
 
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from loader import app
 import asyncio
 
 # اطلاعات ربات
