@@ -119,6 +119,6 @@ async def reply_to_user(client, message):
     else:
         await message.reply("❌ ارتباطی با این پیام پیدا نشد.")
 
-app.run()
+
 
 
