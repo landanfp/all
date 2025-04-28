@@ -11,7 +11,6 @@ admin_id = 705518424
 user_waiting_for_message = set()
 user_last_message = {}  # پیام آخر هر کاربر -> پیام ارسالی به ادمین
 
-app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 async def ask_user_to_send_message(client, message):
     user_id = message.from_user.id
