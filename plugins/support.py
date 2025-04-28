@@ -7,7 +7,7 @@ import asyncio
 # اطلاعات ربات
 
 # آیدی عددی ادمین
-admin_id = 123456789
+admin_id = 705518424
 
 # حافظه وضعیت
 user_waiting_for_message = set()
