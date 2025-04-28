@@ -3,7 +3,7 @@ from fastapi import FastAPI
 import uvicorn
 
 from loader import app
-from plugins import start, hardsub, upload
+from plugins import start, hardsub, upload, support
 
 # FastAPI app برای پاسخ دادن به Health Check
 api = FastAPI()
