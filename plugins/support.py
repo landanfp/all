@@ -20,7 +20,8 @@ async def ask_user_to_send_message(client, message):
     user_waiting_for_message.add(user_id)
     await message.reply_text("لطفاً سوال یا درخواست خود را ارسال کنید.")
 
-# فرمان /start
+# فرمان /start 
+"""
 @app.on_message(filters.command("start"))
 async def start(client, message):
     keyboard = InlineKeyboardMarkup([
@@ -29,7 +30,7 @@ async def start(client, message):
     await message.reply_text(
         "سلام! برای ارسال پیام به ادمین، روی دکمه زیر کلیک کنید یا دستور /support را ارسال کنید.",
         reply_markup=keyboard
-    )
+    ) """
 
 # هندلر دکمه
 @app.on_callback_query(filters.regex("send_to_admin"))
