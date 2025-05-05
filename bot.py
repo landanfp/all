@@ -8,10 +8,10 @@ import os
 import re
 import glob
 
-API_ID = 'YOUR_API_ID'  # جایگزین کنید
-API_HASH = 'YOUR_API_HASH'  # جایگزین کنید
-BOT_TOKEN = 'YOUR_BOT_TOKEN'  # جایگزین کنید
-LOG_CHANNEL = -YOUR_LOG_CHANNEL_ID  # جایگزین کنید
+API_ID = '3335796'
+API_HASH = '138b992a0e672e8346d8439c3f42ea78'
+BOT_TOKEN = '5355055672:AAHoidc0x6nM3g2JHmb7xhWKmwGJOoKFNXY'
+LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
 INSTAGRAM_USERNAME = "olwrls"  # نام کاربری اینستاگرام ربات
 INSTAGRAM_PASSWORD = "fafa_6677"  # رمز عبور اینستاگرام ربات
