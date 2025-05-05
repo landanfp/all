@@ -13,6 +13,7 @@ API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 BOT_TOKEN = '5355055672:AAHoidc0x6nM3g2JHmb7xhWKmwGJOoKFNXY'
 LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
+
 known_users = set()
 tehran_tz = pytz.timezone('Asia/Tehran')
 
@@ -43,7 +44,7 @@ async def download_story(url, message):
     try:
         L = Instaloader()
         # استخراج یوزرنیم از URL استوری
-        username_match = re.search(r"instagram.com/stories/([a-zA-Z0-9_]+)", url)
+        username_match = re.search(r"instagram\.com/stories/([a-zA-Z0-9_]+)", url)
         if username_match:
             username = username_match.group(1)
             profile = Profile.from_username(L.context, username)
@@ -122,73 +123,75 @@ async def insta_download(client, message):
     known_users.add(user_id)
     url = message.text.strip()
 
-    # بررسی اینکه آیا این یک لینک اینستاگرام است یا یوزرنیم
     if "instagram.com" in url:
         if "stories" in url:  # اگر لینک استوری باشد
             await download_story(url, message)
-        else:
-            # تلاش برای استخراج یوزرنیم از لینک
-            username_match = re.search(r"instagram\.com/([a-zA-Z0-9_.]+)/?", url)
-            if username_match:
-                username = username_match.group(1)
-                await send_profile_picture(username, message)
-                return  # از ادامه پردازش به عنوان لینک پست جلوگیری شود
+            return
 
-            shortcode = extract_shortcode(url)
-            if not shortcode:
-                await message.reply("نتونستم کد پست رو استخراج کنم.")
+        # تلاش برای استخراج یوزرنیم از لینک پروفایل
+        profile_match = re.search(r"instagram\.com/([a-zA-Z0-9_.]+)/?", url)
+        if profile_match:
+            username = profile_match.group(1)
+            await send_profile_picture(username, message)
+            return
+
+        shortcode = extract_shortcode(url)
+        if not shortcode:
+            await message.reply("لینک اینستاگرام معتبر نیست.")
+            return
+
+        try:
+            msg = await message.reply("در حال دانلود...")
+        except Exception as e:
+            msg = None
+            await message.reply(f"خطا در ارسال پیام: {e}")
+
+        downloaded_files = []
+        post_caption = None
+        try:
+            L = Instaloader(dirname_pattern="downloads", save_metadata=False, download_comments=False)
+            post = Post.from_shortcode(L.context, shortcode)
+            L.download_post(post, target=None)
+            post_caption = post.caption
+
+            downloaded_files = sorted(
+                glob.glob("downloads/*.mp4") + glob.glob("downloads/*.jpg"),
+                key=os.path.getmtime,
+                reverse=True
+            )[:2]
+
+            if not downloaded_files:
+                await (msg.edit("فایلی برای ارسال پیدا نشد.") if msg else message.reply("فایلی برای ارسال پیدا نشد."))
                 return
 
-            try:
-                msg = await message.reply("در حال دانلود...")
-            except Exception as e:
-                msg = None
-                await message.reply(f"خطا در ارسال پیام: {e}")
-
-            downloaded_files = []
-            post_caption = None  # متغیری برای ذخیره کپشن
-            try:
-                L = Instaloader(dirname_pattern="downloads", save_metadata=False, download_comments=False)
-                post = Post.from_shortcode(L.context, shortcode)
-                L.download_post(post, target=None)
-                post_caption = post.caption  # دریافت کپشن پست
-
-                downloaded_files = sorted(
-                    glob.glob("downloads/*.mp4") + glob.glob("downloads/*.jpg"),
-                    key=os.path.getmtime,
-                    reverse=True
-                )[:2]
-
-                if not downloaded_files:
-                    await (msg.edit("فایلی برای ارسال پیدا نشد.") if msg else message.reply("فایلی برای ارسال پیدا نشد."))
-                    return
-
-                for file in downloaded_files:
+            for file in downloaded_files:
+                try:
                     await message.reply_document(file, caption=post_caption if post_caption else "")
                     os.remove(file)
+                except Exception as e:
+                    await message.reply(f"خطا در ارسال فایل {file}: {e}")
 
-                if msg:
-                    await msg.delete()
+            if msg:
+                await msg.delete()
 
-            except Exception as e:
-                error_message = f"خطا در دانلود:\n{e}"
-                if msg:
-                    try:
-                        await msg.edit(error_message)
-                    except:
-                        await message.reply(error_message)
-                else:
+        except Exception as e:
+            error_message = f"خطا در دانلود:\n{e}"
+            if msg:
+                try:
+                    await msg.edit(error_message)
+                except:
                     await message.reply(error_message)
+            else:
+                await message.reply(error_message)
 
-            finally:
-                # اطمینان از حذف فایل های دانلود شده
-                for file in downloaded_files:
-                    try:
-                        os.remove(file)
-                    except Exception as e:
-                        print(f"خطا در حذف فایل {file}: {e}")
+        finally:
+            # اطمینان از حذف فایل های دانلود شده
+            for file in downloaded_files:
+                try:
+                    os.remove(file)
+                except Exception as e:
+                    print(f"خطا در حذف فایل {file}: {e}")
 
-    # اگر یوزرنیم پیج با @ ارسال شده باشد
     elif "@" in url:
         username = url.replace('@', '').strip()
         await send_profile_picture(username, message)
