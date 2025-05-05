@@ -13,8 +13,6 @@ API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 BOT_TOKEN = '5355055672:AAHoidc0x6nM3g2JHmb7xhWKmwGJOoKFNXY'
 LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
-INSTAGRAM_USERNAME = "olwrls"  # نام کاربری اینستاگرام ربات
-INSTAGRAM_PASSWORD = "fafa_6677"  # رمز عبور اینستاگرام ربات
 
 known_users = set()
 tehran_tz = pytz.timezone('Asia/Tehran')
@@ -28,48 +26,43 @@ def extract_shortcode(url):
         return match.group(2)
     return None
 
-# تابع ارسال پروفایل
+# تابع ارسال پروفایل (بدون لاگین)
 async def send_profile_picture(username, message):
     try:
         L = Instaloader()
         try:
-            L.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
             profile = Profile.from_username(L.context, username)
             profile_pic_url = profile.profile_pic_url
             await message.reply_photo(profile_pic_url)
         except Exception as e:
-            await message.reply(f"خطا در دریافت عکس پروفایل (با لاگین): {e}")
+            await message.reply(f"خطا در دریافت عکس پروفایل (بدون لاگین): {e}")
     except Exception as e:
         await message.reply(f"خطا در ایجاد Instaloader: {e}")
 
-# تابع دانلود استوری
+# تابع دانلود استوری (بدون لاگین)
 async def download_story(url, message):
     try:
         L = Instaloader()
-        try:
-            L.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-            # استخراج یوزرنیم از URL استوری
-            username_match = re.search(r"instagram\.com/stories/([a-zA-Z0-9_]+)", url)
-            if username_match:
-                username = username_match.group(1)
-                profile = Profile.from_username(L.context, username)
-                stories = L.get_stories(userids=[profile.userid])
+        # استخراج یوزرنیم از URL استوری
+        username_match = re.search(r"instagram\.com/stories/([a-zA-Z0-9_]+)", url)
+        if username_match:
+            username = username_match.group(1)
+            profile = Profile.from_username(L.context, username)
+            stories = L.get_stories(userids=[profile.userid])
 
-                # دریافت استوری‌ها و ارسال آن‌ها
-                for story in stories:
-                    for item in story.get_items():
-                        if item.url:
-                            # ارسال ویدیو یا تصویر استوری
-                            if item.is_video:
-                                await message.reply_video(item.url)
-                            else:
-                                await message.reply_photo(item.url)
-            else:
-                await message.reply("لینک استوری معتبر نیست.")
-        except Exception as e:
-            await message.reply(f"خطا در دانلود استوری (با لاگین): {e}")
+            # دریافت استوری‌ها و ارسال آن‌ها
+            for story in stories:
+                for item in story.get_items():
+                    if item.url:
+                        # ارسال ویدیو یا تصویر استوری
+                        if item.is_video:
+                            await message.reply_video(item.url)
+                        else:
+                            await message.reply_photo(item.url)
+        else:
+            await message.reply("لینک استوری معتبر نیست.")
     except Exception as e:
-        await message.reply(f"خطا در ایجاد Instaloader: {e}")
+        await message.reply(f"خطا در دانلود استوری (بدون لاگین): {e}")
 
 # دستور /start
 @bot.on_message(filters.private & filters.command("start"))
@@ -123,7 +116,7 @@ async def users_handler(client, message):
     user_count = len(known_users)
     await message.reply(f"{user_count}")
 
-# دریافت و دانلود پست
+# دریافت و دانلود پست (بدون لاگین)
 @bot.on_message(filters.private & filters.text)
 async def insta_download(client, message):
     user_id = message.from_user.id
@@ -156,44 +149,40 @@ async def insta_download(client, message):
         downloaded_files = []
         post_caption = None
         try:
-            L = Instaloader()
-            try:
-                L.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-                post = Post.from_shortcode(L.context, shortcode)
-                L.download_post(post, target=None)
-                post_caption = post.caption
+            L = Instaloader(dirname_pattern="downloads", save_metadata=False, download_comments=False)
+            post = Post.from_shortcode(L.context, shortcode)
+            L.download_post(post, target=None)
+            post_caption = post.caption
 
-                downloaded_files = sorted(
-                    glob.glob("downloads/*.mp4") + glob.glob("downloads/*.jpg"),
-                    key=os.path.getmtime,
-                    reverse=True
-                )[:2]
+            downloaded_files = sorted(
+                glob.glob("downloads/*.mp4") + glob.glob("downloads/*.jpg"),
+                key=os.path.getmtime,
+                reverse=True
+            )[:2]
 
-                if not downloaded_files:
-                    await (msg.edit("فایلی برای ارسال پیدا نشد.") if msg else message.reply("فایلی برای ارسال پیدا نشد."))
-                    return
+            if not downloaded_files:
+                await (msg.edit("فایلی برای ارسال پیدا نشد.") if msg else message.reply("فایلی برای ارسال پیدا نشد."))
+                return
 
-                for file in downloaded_files:
-                    try:
-                        await message.reply_document(file, caption=post_caption if post_caption else "")
-                        os.remove(file)
-                    except Exception as e:
-                        await message.reply(f"خطا در ارسال فایل {file}: {e}")
+            for file in downloaded_files:
+                try:
+                    await message.reply_document(file, caption=post_caption if post_caption else "")
+                    os.remove(file)
+                except Exception as e:
+                    await message.reply(f"خطا در ارسال فایل {file}: {e}")
 
-                if msg:
-                    await msg.delete()
-            except Exception as e:
-                error_message = f"خطا در دانلود (با لاگین):\n{e}"
-                if msg:
-                    try:
-                        await msg.edit(error_message)
-                    except:
-                        await message.reply(error_message)
-                else:
-                    await message.reply(error_message)
+            if msg:
+                await msg.delete()
 
         except Exception as e:
-            await message.reply(f"خطا در ایجاد Instaloader: {e}")
+            error_message = f"خطا در دانلود:\n{e}"
+            if msg:
+                try:
+                    await msg.edit(error_message)
+                except:
+                    await message.reply(error_message)
+            else:
+                await message.reply(error_message)
 
         finally:
             # اطمینان از حذف فایل های دانلود شده
