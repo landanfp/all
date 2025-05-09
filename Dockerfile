@@ -1,20 +1,21 @@
+# Use an official Python image as a base
+FROM python:3.10-slim
 
-FROM python:3.10
-
-# 
-
-# ساخت دایرکتوری اپ
+# Set working directory
 WORKDIR /app
 
-# کپی فایل‌های پروژه به داخل کانتینر
-COPY . /app
+# Install system dependencies (including libGL)
+RUN apt-get update && apt-get install -y \
+    libgl1 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# نصب وابستگی‌ها
+# Install Python dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN apt-get update && apt-get install -y ffmpeg
 
-# باز کردن پورت (اختیاری، مثلا اگه یه API داری)
-# EXPOSE 8000
+# Copy project files
+COPY . .
 
-# اجرای برنامه
+# Run the application
 CMD ["python", "bot.py"]
