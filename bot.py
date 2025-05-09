@@ -104,9 +104,6 @@ async def do_advanced_face_swap(user_id, face_path, target_path):
             dist_dst = np.sqrt(dx_dst**2 + dy_dst**2)
             angle_dst = np.arctan2(dy_dst, dx_dst)
 
-            scale_factor = dist_dst / dist_src if dist_src > 0 else 1.0
-            rotation = angle_dst - angle_src
-
             center_src = ((eye_center_src[0] + eye_center_right_src[0]) // 2,
                            (eye_center_src[1] + eye_center_right_src[1]) // 2)
             center_dst = ((eye_center_dst[0] + eye_center_right_dst[0]) // 2,
@@ -119,72 +116,76 @@ async def do_advanced_face_swap(user_id, face_path, target_path):
             M[1, 2] += dy
             return M
 
-        M = transformation_matrix(face_eye_left, target_eye_left, face_eye_right, target_eye_right)
-        if M is None:
-            return None
-        aligned_face = cv2.warpAffine(face_img, M, (target_img.shape[1], target_img.shape[0]))
-        aligned_face_rgb = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
-        aligned_face_locations = face_recognition.face_locations(aligned_face_rgb)
-        if not aligned_face_locations:
-            print("خطا: چهره پس از هم‌تراز سازی شناسایی نشد.")
-            return None
-        aligned_face_landmarks = face_recognition.face_landmarks(aligned_face_rgb, aligned_face_locations)[0]
+        if face_eye_left is not None and face_eye_right is not None and target_eye_left is not None and target_eye_right is not None:
+            M = transformation_matrix(face_eye_left, target_eye_left, face_eye_right, target_eye_right)
+            if M is None:
+                return None
+            aligned_face = cv2.warpAffine(face_img, M, (target_img.shape[1], target_img.shape[0]))
+            aligned_face_rgb = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+            aligned_face_locations = face_recognition.face_locations(aligned_face_rgb)
+            if not aligned_face_locations:
+                print("خطا: چهره پس از هم‌تراز سازی شناسایی نشد.")
+                return None
+            aligned_face_landmarks = face_recognition.face_landmarks(aligned_face_rgb, aligned_face_locations)[0]
 
-        # 2. حذف پس‌زمینه تقریبی با ماسک بیضی
-        mask = np.zeros(aligned_face.shape[:2], dtype=np.uint8)
-        if aligned_face_landmarks.get('nose_bridge') is not None and len(aligned_face_landmarks['nose_bridge']) > 0 and \
-           aligned_face_landmarks.get('chin') is not None and len(aligned_face_landmarks['chin']) > 0 and \
-           aligned_face_landmarks.get('left_eye') is not None and len(aligned_face_landmarks['left_eye']) > 0 and \
-           aligned_face_landmarks.get('right_eye') is not None and len(aligned_face_landmarks['right_eye']) > 0 and \
-           aligned_face_landmarks.get('top_lip') is not None and len(aligned_face_landmarks['top_lip']) > 0:
-            nose_bridge = np.mean(aligned_face_landmarks['nose_bridge'], axis=0, dtype=np.int32)
-            chin_points = np.array(aligned_face_landmarks['chin'], dtype=np.int32)
-            min_chin = np.min(chin_points[:, 1])
-            max_chin = np.max(chin_points[:, 1])
-            left_eye_center = np.mean(aligned_face_landmarks['left_eye'], axis=0)
-            right_eye_center = np.mean(aligned_face_landmarks['right_eye'], axis=0)
-            face_width = int(np.linalg.norm(left_eye_center - right_eye_center) * 2) + 20
-            face_height = int(max_chin - np.mean(aligned_face_landmarks['top_lip'], axis=0)[1] * 2) + 40
-            center_face = (nose_bridge[0], (nose_bridge[1] + min_chin) // 2)
-            axes = (max(1, face_width // 2), max(1, face_height // 2)) # Ensure axes are not zero
-            cv2.ellipse(mask, center_face, axes, 0, 0, 360, 255, -1)
-            masked_face = cv2.bitwise_and(aligned_face, aligned_face, mask=mask)
-            masked_face_rgba = cv2.cvtColor(masked_face, cv2.COLOR_BGR2BGRA)
-            masked_face_rgba[mask == 0] = [0, 0, 0, 0]
+            # 2. حذف پس‌زمینه تقریبی با ماسک بیضی
+            mask = np.zeros(aligned_face.shape[:2], dtype=np.uint8)
+            if aligned_face_landmarks.get('nose_bridge') is not None and len(aligned_face_landmarks['nose_bridge']) > 0 and \
+               aligned_face_landmarks.get('chin') is not None and len(aligned_face_landmarks['chin']) > 0 and \
+               aligned_face_landmarks.get('left_eye') is not None and len(aligned_face_landmarks['left_eye']) > 0 and \
+               aligned_face_landmarks.get('right_eye') is not None and len(aligned_face_landmarks['right_eye']) > 0 and \
+               aligned_face_landmarks.get('top_lip') is not None and len(aligned_face_landmarks['top_lip']) > 0:
+                nose_bridge = np.mean(aligned_face_landmarks['nose_bridge'], axis=0, dtype=np.int32)
+                chin_points = np.array(aligned_face_landmarks['chin'], dtype=np.int32)
+                min_chin = np.min(chin_points[:, 1])
+                max_chin = np.max(chin_points[:, 1])
+                left_eye_center = np.mean(aligned_face_landmarks['left_eye'], axis=0)
+                right_eye_center = np.mean(aligned_face_landmarks['right_eye'], axis=0)
+                face_width = int(np.linalg.norm(left_eye_center - right_eye_center) * 2) + 20
+                face_height = int(max_chin - np.mean(aligned_face_landmarks['top_lip'], axis=0)[1] * 2) + 40
+                center_face = (nose_bridge[0], (nose_bridge[1] + min_chin) // 2)
+                axes = (max(1, face_width // 2), max(1, face_height // 2)) # Ensure axes are not zero
+                cv2.ellipse(mask, center_face, axes, 0, 0, 360, 255, -1)
+                masked_face = cv2.bitwise_and(aligned_face, aligned_face, mask=mask)
+                masked_face_rgba = cv2.cvtColor(masked_face, cv2.COLOR_BGR2BGRA)
+                masked_face_rgba[mask == 0] = [0, 0, 0, 0]
+            else:
+                print("خطا: نقاط کلیدی ضروری برای ایجاد ماسک یافت نشد.")
+                masked_face_rgba = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2BGRA)
+
+            # 3. جایگذاری و تطبیق روشنایی ساده
+            if target_locations:
+                target_top, target_right, target_bottom, target_left = target_locations[0]
+                face_resized = cv2.resize(masked_face_rgba, (target_right - target_left, target_bottom - target_top))
+
+                target_face_area = target_img[target_top:target_bottom, target_left:target_right].copy()
+
+                face_resized = face_resized.astype(np.float32) / 255.0
+                target_face_area = target_face_area.astype(np.float32) / 255.0
+
+                face_mean_brightness = np.mean(cv2.cvtColor(face_resized[:, :, :3], cv2.COLOR_BGR2GRAY)) if face_resized.shape[2] == 4 and np.any(face_resized[:, :, 3] > 0) else np.mean(cv2.cvtColor(face_resized[:, :, :3], cv2.COLOR_BGR2GRAY))
+                target_face_mean_brightness = np.mean(cv2.cvtColor(target_face_area, cv2.COLOR_BGR2GRAY))
+
+                brightness_factor = target_face_mean_brightness / (face_mean_brightness + 1e-6)
+                adjusted_face = cv2.convertScaleAbs(face_resized[:, :, :3] * brightness_factor, alpha=1, beta=0)
+                final_face = adjusted_face
+                if face_resized.shape[2] == 4:
+                    final_face = np.dstack((adjusted_face, face_resized[:, :, 3]))
+
+                alpha_face = final_face[:, :, 3:] if final_face.shape[2] == 4 else np.ones(final_face.shape[:2, None])
+                alpha_target = 1.0 - alpha_face
+
+                blended_face = (alpha_face * final_face[:, :, :3] + alpha_target * target_face_area).astype(np.uint8)
+                target_img[target_top:target_bottom, target_left:target_right] = blended_face
+
+                swapped_path = f"swapped_advanced_{user_id}.jpg"
+                cv2.imwrite(swapped_path, target_img)
+                return swapped_path
+            else:
+                print("خطا: موقعیت چهره هدف در دسترس نیست.")
+                return None
         else:
-            print("خطا: نقاط کلیدی ضروری برای ایجاد ماسک یافت نشد.")
-            masked_face_rgba = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2BGRA)
-
-        # 3. جایگذاری و تطبیق روشنایی ساده
-        if target_locations:
-            target_top, target_right, target_bottom, target_left = target_locations[0]
-            face_resized = cv2.resize(masked_face_rgba, (target_right - target_left, target_bottom - target_top))
-
-            target_face_area = target_img[target_top:target_bottom, target_left:target_right].copy()
-
-            face_resized = face_resized.astype(np.float32) / 255.0
-            target_face_area = target_face_area.astype(np.float32) / 255.0
-
-            face_mean_brightness = np.mean(cv2.cvtColor(face_resized[:, :, :3], cv2.COLOR_BGR2GRAY)) if face_resized.shape[2] == 4 and np.any(face_resized[:, :, 3] > 0) else np.mean(cv2.cvtColor(face_resized[:, :, :3], cv2.COLOR_BGR2GRAY))
-            target_face_mean_brightness = np.mean(cv2.cvtColor(target_face_area, cv2.COLOR_BGR2GRAY))
-
-            brightness_factor = target_face_mean_brightness / (face_mean_brightness + 1e-6)
-            adjusted_face = cv2.convertScaleAbs(face_resized[:, :, :3] * brightness_factor, alpha=1, beta=0)
-            final_face = adjusted_face
-            if face_resized.shape[2] == 4:
-                final_face = np.dstack((adjusted_face, face_resized[:, :, 3]))
-
-            alpha_face = final_face[:, :, 3:] if final_face.shape[2] == 4 else np.ones(final_face.shape[:2, None])
-            alpha_target = 1.0 - alpha_face
-
-            blended_face = (alpha_face * final_face[:, :, :3] + alpha_target * target_face_area).astype(np.uint8)
-            target_img[target_top:target_bottom, target_left:target_right] = blended_face
-
-            swapped_path = f"swapped_advanced_{user_id}.jpg"
-            cv2.imwrite(swapped_path, target_img)
-            return swapped_path
-        else:
-            print("خطا: موقعیت چهره هدف در دسترس نیست.")
+            print("خطا: مراکز چشم برای هم‌تراز سازی در دسترس نیستند.")
             return None
 
     except Exception as e:
