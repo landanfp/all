@@ -17,4 +17,4 @@ RUN apt-get update && apt-get install -y ffmpeg
 # EXPOSE 8000
 
 # اجرای برنامه
-CMD ["python", "main.py"]
+CMD ["python", "bot.py"]
