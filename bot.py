@@ -161,33 +161,37 @@ async def do_advanced_face_swap(user_id, face_path, target_path):
             masked_face_rgba = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2BGRA)
 
         # 3. جایگذاری و تطبیق روشنایی ساده
-        target_top, target_right, target_bottom, target_left = target_locations[0]
-        face_resized = cv2.resize(masked_face_rgba, (target_right - target_left, target_bottom - target_top))
+        if target_locations:
+            target_top, target_right, target_bottom, target_left = target_locations[0]
+            face_resized = cv2.resize(masked_face_rgba, (target_right - target_left, target_bottom - target_top))
 
-        target_face_area = target_img[target_top:target_bottom, target_left:target_right].copy()
+            target_face_area = target_img[target_top:target_bottom, target_left:target_right].copy()
 
-        face_mean_brightness = np.mean(cv2.cvtColor(face_resized[:, :, :3].astype(np.float32) / 255.0, cv2.COLOR_BGR2GRAY)) if face_resized.shape[2] == 4 and np.any(face_resized[:, :, 3] > 0) else np.mean(cv2.cvtColor(face_resized.astype(np.float32) / 255.0, cv2.COLOR_BGR2GRAY))
-        target_face_mean_brightness = np.mean(cv2.cvtColor(target_face_area.astype(np.float32) / 255.0, cv2.COLOR_BGR2GRAY))
+            face_mean_brightness = np.mean(cv2.cvtColor(face_resized[:, :, :3].astype(np.float32) / 255.0, cv2.COLOR_BGR2GRAY)) if face_resized.shape[2] == 4 and np.any(face_resized[:, :, 3] > 0) else np.mean(cv2.cvtColor(face_resized.astype(np.float32) / 255.0, cv2.COLOR_BGR2GRAY))
+            target_face_mean_brightness = np.mean(cv2.cvtColor(target_face_area.astype(np.float32) / 255.0, cv2.COLOR_BGR2GRAY))
 
-        brightness_factor = target_face_mean_brightness / (face_mean_brightness + 1e-6)
-        adjusted_face = cv2.convertScaleAbs(face_resized[:, :, :3], alpha=brightness_factor, beta=0)
-        final_face = adjusted_face
-        if face_resized.shape[2] == 4:
-            final_face = np.dstack((adjusted_face, face_resized[:, :, 3]))
+            brightness_factor = target_face_mean_brightness / (face_mean_brightness + 1e-6)
+            adjusted_face = cv2.convertScaleAbs(face_resized[:, :, :3], alpha=brightness_factor, beta=0)
+            final_face = adjusted_face
+            if face_resized.shape[2] == 4:
+                final_face = np.dstack((adjusted_face, face_resized[:, :, 3]))
 
-        # ترکیب با در نظر گرفتن آلفا
-        alpha_face = final_face[:, :, 3] / 255.0 if final_face.shape[2] == 4 else np.ones(final_face.shape[:2])
-        alpha_target = 1.0 - alpha_face
-        blended_face = np.zeros(target_face_area.shape, dtype=np.uint8)
-        for c in range(0, 3):
-            blended_face[:, :, c] = (alpha_face * final_face[:, :, c] +
-                                     alpha_target * target_face_area[:, :, c])
+            # ترکیب با در نظر گرفتن آلفا
+            alpha_face = final_face[:, :, 3] / 255.0 if final_face.shape[2] == 4 else np.ones(final_face.shape[:2])
+            alpha_target = 1.0 - alpha_face
+            blended_face = np.zeros(target_face_area.shape, dtype=np.uint8)
+            for c in range(0, 3):
+                blended_face[:, :, c] = (alpha_face * final_face[:, :, c] +
+                                         alpha_target * target_face_area[:, :, c])
 
-        target_img[target_top:target_bottom, target_left:target_right] = blended_face
+            target_img[target_top:target_bottom, target_left:target_right] = blended_face
 
-        swapped_path = f"swapped_advanced_{user_id}.jpg"
-        cv2.imwrite(swapped_path, target_img)
-        return swapped_path
+            swapped_path = f"swapped_advanced_{user_id}.jpg"
+            cv2.imwrite(swapped_path, target_img)
+            return swapped_path
+        else:
+            print("خطا: موقعیت چهره هدف در دسترس نیست.")
+            return None
 
     except Exception as e:
         print("خطا در پردازش پیشرفته:", e)
