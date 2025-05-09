@@ -1,23 +1,20 @@
-FROM python:3.9-slim
 
-# نصب ابزارهای مورد نیاز
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    imagemagick \
-    libx11-6 \
-    libxext6 \
-    libsm6 \
-    && rm -rf /var/lib/apt/lists/*
+FROM python:3.10
 
-# تنظیم مسیر کاری
+# 
+
+# ساخت دایرکتوری اپ
 WORKDIR /app
 
-# کپی پروژه داخل کانتینر
+# کپی فایل‌های پروژه به داخل کانتینر
 COPY . /app
 
-# نصب MoviePy و پکیج‌های مورد نیازش
-RUN pip install --upgrade pip
+# نصب وابستگی‌ها
 RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y ffmpeg
 
-CMD ["python", "bot.py"]
+# باز کردن پورت (اختیاری، مثلا اگه یه API داری)
+# EXPOSE 8000
 
+# اجرای برنامه
+CMD ["python", "main.py"]
