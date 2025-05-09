@@ -23,8 +23,6 @@ RUN pip install moviepy==1.0.3 imageio-ffmpeg==0.4.5
 RUN pip install --no-cache-dir -r requirements.txt
 
 # تست نصب moviepy (اختیاری ولی مفیده برای لاگ)
-RUN python -c "from moviepy.editor import VideoFileClip; print('MoviePy installed successfully.')"
-
 # اجرای برنامه اصلی
 CMD ["python", "bot.py"]
 
