@@ -105,12 +105,12 @@ async def do_advanced_face_swap(user_id, face_path, target_path):
             angle_dst = np.arctan2(dy_dst, dx_dst)
 
             scale_factor = dist_dst / dist_src if dist_src > 0 else 1.0
-            rotation = angle_dst - angle_src if dist_src > 0 else 0.0  # تنظیم rotation به 0 در صورت dist_src == 0
+            rotation = angle_dst - angle_src if dist_src > 0 else 0.0
 
-            center_src = ((eye_center_src[0] + eye_center_right_src[0]) // 2,
-                           (eye_center_src[1] + eye_center_right_src[1]) // 2)
-            center_dst = ((eye_center_dst[0] + eye_center_right_dst[0]) // 2,
-                           (eye_center_dst[1] + eye_center_right_dst[1]) // 2)
+            center_src = (int((eye_center_src[0] + eye_center_right_src[0]) // 2),
+                           int((eye_center_src[1] + eye_center_right_src[1]) // 2))
+            center_dst = (int((eye_center_dst[0] + eye_center_right_dst[0]) // 2),
+                           int((eye_center_dst[1] + eye_center_right_dst[1]) // 2))
 
             M = cv2.getRotationMatrix2D(center_src, np.degrees(rotation), scale_factor * scale)
             dx = center_dst[0] - center_src[0]
@@ -159,7 +159,7 @@ async def do_advanced_face_swap(user_id, face_path, target_path):
             # 3. جایگذاری و تطبیق روشنایی ساده
             if target_locations:
                 target_top, target_right, target_bottom, target_left = target_locations[0]
-                face_resized = cv2.resize(masked_face_rgba, (target_right - target_left, target_bottom - top_left)) # Fix: Use target_left
+                face_resized = cv2.resize(masked_face_rgba, (target_right - target_left, target_bottom - target_left)) # Fix: Use target_left
                 target_face_area = target_img[target_top:target_bottom, target_left:target_right].copy()
 
                 face_resized = face_resized.astype(np.float32) / 255.0
