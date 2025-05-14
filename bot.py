@@ -4,36 +4,45 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from PIL import Image, ImageFilter
 
 # تنظیمات ربات - مقادیر خودت رو جایگزین کن
-API_ID = '3335796'
-API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
-
+BOT_TOKEN = "6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8"
+API_ID = 3335796 
+API_HASH = "138b992a0e672e8346d8439c3f42ea78"
 
 app = Client("image_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 
 # ذخیره اطلاعات کاربران
 user_data = {}  # ساختار: {user_id: {"path": "file.jpg", "actions": set()}}
 
-# هندل پیام عکس
-@app.on_message(filters.photo)
+# هندل پیام عکس و فایل‌ها
+@app.on_message(filters.photo | filters.document)
 async def handle_photo(client, message):
-    user_id = message.from_user.id
-    file_path = f"{user_id}_original.jpg"
-    await message.download(file_path)
-    
-    user_data[user_id] = {"path": file_path, "actions": set()}
+    try:
+        print("عکس دریافت شد!")
+        user_id = message.from_user.id
+        file_path = f"{user_id}_original.jpg"
+        
+        # دانلود عکس یا فایل
+        await message.download(file_path)
+        
+        # ذخیره اطلاعات کاربر
+        user_data[user_id] = {"path": file_path, "actions": set()}
 
-    # دکمه‌ها
-    buttons = [
-        [InlineKeyboardButton("افزایش کیفیت", callback_data="upscale")],
-        [InlineKeyboardButton("تبدیل به Marvel", callback_data="marvel")],
-        [InlineKeyboardButton("حذف پس‌زمینه", callback_data="remove_bg")],
-        [InlineKeyboardButton("کارتونی کن", callback_data="cartoon")],
-    ]
-    await message.reply(
-        "کدام عملیات‌ها را می‌خواهی انجام دهم؟",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
+        # دکمه‌ها
+        buttons = [
+            [InlineKeyboardButton("افزایش کیفیت", callback_data="upscale")],
+            [InlineKeyboardButton("تبدیل به Marvel", callback_data="marvel")],
+            [InlineKeyboardButton("حذف پس‌زمینه", callback_data="remove_bg")],
+            [InlineKeyboardButton("کارتونی کن", callback_data="cartoon")],
+        ]
+        
+        await message.reply(
+            "کدام عملیات‌ها را می‌خواهی انجام دهم؟",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    except Exception as e:
+        print(f"خطا در دریافت عکس: {e}")
+        await message.reply("خطا در دریافت عکس. لطفاً دوباره امتحان کن.")
 
 # هندل کلیک روی دکمه‌ها
 @app.on_callback_query()
@@ -52,7 +61,7 @@ async def handle_callback(client, callback_query):
     user_data[user_id]["actions"].add(action)
     await callback_query.answer("اضافه شد.")
 
-    # دکمه شروع نمایش بده
+    # دکمه شروع پردازش
     if len(user_data[user_id]["actions"]) >= 1:
         await callback_query.message.reply(
             "برای شروع پردازش، روی دکمه زیر کلیک کن:",
