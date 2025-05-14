@@ -10,9 +10,9 @@ from watermark import process_video_with_watermark, generate_thumbnail, get_vide
 from display import progress_bar
 
 # اطلاعات ربات (لطفاً با مقادیر واقعی خود جایگزین کنید)
-API_ID = 'YOUR_API_ID'
-API_HASH = 'YOUR_API_HASH'
-BOT_TOKEN = 'YOUR_BOT_TOKEN'
+API_ID = '3335796'
+API_HASH = '138b992a0e672e8346d8439c3f42ea78'
+BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
 
 app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
