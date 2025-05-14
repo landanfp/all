@@ -1,52 +1,9 @@
-# (c) @AbirHasan2005 (تغییرات اضافه شده از bot.py)
-
 import math
 import time
 from pyrogram.types import Message
 
 
-async def progress_for_pyrogram(current, total, ud_type, message: Message, logs_msg: Message, start):
-    now = time.time()
-    diff = now - start
-    if round(diff % 10.00) == 0 or current == total:
-        percentage = current * 100 / total
-        speed = current / diff
-        elapsed_time = round(diff) * 1000
-        time_to_completion = round((total - current) / speed) * 1000
-        estimated_total_time = elapsed_time + time_to_completion
-        elapsed_time = TimeFormatter(milliseconds=elapsed_time)
-        estimated_total_time = TimeFormatter(milliseconds=estimated_total_time)
-
-        progress = "[{0}{1}] \n".format(
-            ''.join(["●" for i in range(math.floor(percentage / 5))]),
-            ''.join(["○" for i in range(20 - math.floor(percentage / 5))])
-        )
-
-        tmp = progress + Config.PROGRESS.format(
-            round(percentage, 2),
-            humanbytes(current),
-            humanbytes(total),
-            humanbytes(speed),
-            estimated_total_time if estimated_total_time != '' else "0 s"
-        )
-        try:
-            await message.edit(
-                text="**{}**\n\n {}".format(
-                    ud_type,
-                    tmp
-                ),
-                parse_mode='markdown'
-            )
-        except:
-            pass
-        try:
-            await logs_msg.edit(
-                text="**{}**\n\n {}".format(ud_type, tmp)
-            )
-        except:
-            pass
-
-
+# تبدیل حجم
 def humanbytes(size):
     if not size:
         return ""
@@ -58,20 +15,7 @@ def humanbytes(size):
         n += 1
     return str(round(size, 2)) + " " + Dic_powerN[n] + 'B'
 
-
-def TimeFormatter(milliseconds: int) -> str:
-    seconds, milliseconds = divmod(int(milliseconds), 1000)
-    minutes, seconds = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    days, hours = divmod(hours, 24)
-    tmp = ((str(days) + "d, ") if days else "") + \
-        ((str(hours) + "h, ") if hours else "") + \
-        ((str(minutes) + "m, ") if minutes else "") + \
-        ((str(seconds) + "s, ") if seconds else "") + \
-        ((str(milliseconds) + "ms, ") if milliseconds else "")
-    return tmp[:-2]
-
-# اضافه شده از bot.py
+# نوار پیشرفت (اصلاح شده برای دریافت status_message)
 async def progress_bar(
     current_val, total_val, status_message, action, start,
     display_bytes_current=None, display_bytes_total=None
@@ -99,16 +43,16 @@ async def progress_bar(
 
     size_text_line = ""
     if (action.startswith("در حال دانلود") or action.startswith("در حال آپلود")) and total_val > 0:
-        size_text_line = f"• حجم: {convert_size(current_val)} / {convert_size(total_val)}"
+        size_text_line = f"• حجم: {humanbytes(current_val)} / {humanbytes(total_val)}"
     elif display_bytes_current is not None and display_bytes_total is not None and display_bytes_total > 0:
          current_bytes_to_display = min(display_bytes_current, display_bytes_total)
-         size_text_line = f"• حجم: {convert_size(current_bytes_to_display)} / {convert_size(display_bytes_total)}"
+         size_text_line = f"• حجم: {humanbytes(current_bytes_to_display)} / {humanbytes(display_bytes_total)}"
 
     if size_text_line:
         lines.append(size_text_line)
 
     lines.extend([
-        f"• سرعت: {convert_size(speed)}/s",
+        f"• سرعت: {humanbytes(speed)}/s",
         f"• زمان سپری‌شده: {elapsed_time}s",
         f"• زمان باقی‌مانده: {eta}s"
     ])
@@ -122,16 +66,55 @@ async def progress_bar(
     except Exception:
         pass
 
-# اضافه شده از bot.py
-def convert_size(size_bytes):
-    if size_bytes == 0:
-        return "0B"
-    size_name = ("B", "KB", "MB", "GB", "TB")
-    try:
-        i = int(math.floor(math.log(size_bytes, 1024)))
-        if i < 0: i = 0
-    except ValueError:
-        i = 0
-    p = math.pow(1024, i)
-    s = round(size_bytes / p, 2)
-    return f"{s} {size_name[i]}"
+def TimeFormatter(milliseconds: int) -> str:
+    seconds, milliseconds = divmod(int(milliseconds), 1000)
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    tmp = ((str(days) + "d, ") if days else "") + \
+          ((str(hours) + "h, ") if hours else "") + \
+          ((str(minutes) + "m, ") if minutes else "") + \
+          ((str(seconds) + "s, ") if seconds else "") + \
+          ((str(milliseconds) + "ms, ") if milliseconds else "")
+    return tmp[:-2]
+
+async def progress_for_pyrogram(current, total, ud_type, message: Message, logs_msg: Message, start):
+    now = time.time()
+    diff = now - start
+    if round(diff % 10.00) == 0 or current == total:
+        percentage = current * 100 / total
+        speed = current / diff
+        elapsed_time = round(diff) * 1000
+        time_to_completion = round((total - current) / speed) * 1000
+        estimated_total_time = elapsed_time + time_to_completion
+        elapsed_time = TimeFormatter(milliseconds=elapsed_time)
+        estimated_total_time = TimeFormatter(milliseconds=estimated_total_time)
+
+        progress = "[{0}{1}] \n".format(
+            ''.join(["●" for i in range(math.floor(percentage / 5))]),
+            ''.join(["○" for i in range(20 - math.floor(percentage / 5))])
+            )
+
+        tmp = progress + "در حال {}:\n{} از {}\nسرعت: {}/s\nزمان باقی مانده: {}".format(
+            ud_type,
+            humanbytes(current),
+            humanbytes(total),
+            humanbytes(speed),
+            estimated_total_time if estimated_total_time != '' else "0 s"
+        )
+        try:
+            await message.edit(
+                text="**{}**\n\n {}".format(
+                    ud_type,
+                    tmp
+                ),
+                parse_mode='markdown'
+            )
+        except:
+            pass
+        try:
+            await logs_msg.edit(
+                text="**{}**\n\n {}".format(ud_type, tmp)
+            )
+        except:
+            pass
