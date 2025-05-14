@@ -1,3 +1,5 @@
+# تانمبینل آخرش میچسبه
+
 from pyrogram import Client, filters
 from pyrogram.types import Message
 import os
