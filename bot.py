@@ -4,48 +4,58 @@ import os
 import asyncio
 import time
 import math
-import subprocess # اگرچه مستقیماً استفاده نمی‌شود، اما برای آگاهی از وابستگی‌های احتمالی ffmpeg خوب است.
+# import subprocess
 from flask import Flask
 from threading import Thread
-import json # برای تفسیر خروجی جیسون از ffprobe
+import json
 
-# اطلاعات ربات
-API_ID = '3335796' # لطفاً این مقادیر را با مقادیر واقعی خود جایگزین کنید
-API_HASH = '138b992a0e672e8346d8439c3f42ea78' # لطفاً این مقادیر را با مقادیر واقعی خود جایگزین کنید
-BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8' # لطفاً این مقادیر را با مقادیر واقعی خود جایگزین کنید
+# اطلاعات ربات (لطفاً با مقادیر واقعی خود جایگزین کنید)
+API_ID = os.environ.get('API_ID', '3335796')
+API_HASH = os.environ.get('API_HASH', '138b992a0e672e8346d8439c3f42ea78')
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8')
 
 app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# وب‌سرور ساده برای health check در Koyeb
+# وب‌سرور ساده برای health check
 flask_app = Flask(__name__)
 @flask_app.route("/")
-def home():
+def home_route():
     return "OK", 200
 
 def run_flask():
-    flask_app.run(host="0.0.0.0", port=os.environ.get("PORT", 8000)) # استفاده از پورت Koyeb یا پیش‌فرض
+    port = int(os.environ.get("PORT", 8000))
+    flask_app.run(host="0.0.0.0", port=port)
 
 # تبدیل حجم
 def convert_size(size_bytes):
     if size_bytes == 0:
         return "0B"
     size_name = ("B", "KB", "MB", "GB", "TB")
-    i = int(math.floor(math.log(size_bytes, 1024)))
+    try:
+        i = int(math.floor(math.log(size_bytes, 1024)))
+        if i < 0: i = 0
+    except ValueError:
+        i = 0
     p = math.pow(1024, i)
     s = round(size_bytes / p, 2)
     return f"{s} {size_name[i]}"
 
-# نوار پیشرفت
-async def progress_bar(current, total, status_message, action, start):
+# نوار پیشرفت اصلاح‌شده
+async def progress_bar(
+    current_val, total_val, status_message, action, start,
+    # آرگومان‌های display_bytes دیگر به طور فعال توسط واترمارک استفاده نمی‌شوند
+    # اما برای حفظ امضا و سازگاری احتمالی آینده باقی می‌مانند.
+    display_bytes_current=None, display_bytes_total=None
+):
     now = time.time()
-    diff = now - start if now - start > 0 else 0.001 # جلوگیری از تقسیم بر صفر یا مقادیر منفی
-    percentage = current * 100 / total if total > 0 else 0
-    speed = current / diff if diff > 0 else 0
-    elapsed_time = round(diff)
-    eta = round((total - current) / speed) if speed > 0 and total > 0 else 0
+    diff = now - start if now - start > 0 else 0.001
+    percentage = current_val * 100 / total_val if total_val > 0 else 0
+    speed = current_val / diff if diff > 0 else 0
     
-    # اطمینان از اینکه current از total بیشتر نشود (برای نمایش 100%)
-    if current >= total and total > 0 :
+    elapsed_time = round(diff)
+    eta = round((total_val - current_val) / speed) if speed > 0 and total_val > 0 else 0
+    
+    if current_val >= total_val and total_val > 0 :
         percentage = 100.00
         eta = 0
         
@@ -53,25 +63,41 @@ async def progress_bar(current, total, status_message, action, start):
     filled_length = int(bar_length * percentage / 100)
     bar = "█" * filled_length + "░" * (bar_length - filled_length)
     
-    text = f"""
-{action}
-[{bar}] {percentage:.2f}%
-• حجم: {convert_size(current if total > 0 else 0)} / {convert_size(total if total > 0 else 0)}
-• سرعت: {convert_size(speed)}/s
-• زمان سپری‌شده: {elapsed_time}s
-• زمان باقی‌مانده: {eta}s
-"""
+    lines = [
+        action,
+        f"[{bar}] {percentage:.2f}%"
+    ]
+
+    size_text_line = ""
+    # نمایش خط "حجم" فقط برای عملیات دانلود و آپلود
+    if (action.startswith("در حال دانلود") or action.startswith("در حال آپلود")) and total_val > 0:
+        # در این حالت‌ها، current_val و total_val مقادیر بایت هستند
+        size_text_line = f"• حجم: {convert_size(current_val)} / {convert_size(total_val)}"
+    # اگر display_bytes_current و display_bytes_total به صراحت پاس داده شوند (که دیگر برای واترمارک اینطور نیست)
+    # می‌توانستیم آن را نیز مدیریت کنیم، اما طبق درخواست جدید، برای واترمارک حجمی نمایش داده نمی‌شود.
+    elif display_bytes_current is not None and display_bytes_total is not None and display_bytes_total > 0:
+         current_bytes_to_display = min(display_bytes_current, display_bytes_total)
+         size_text_line = f"• حجم: {convert_size(current_bytes_to_display)} / {convert_size(display_bytes_total)}"
+
+    if size_text_line:
+        lines.append(size_text_line)
+    
+    lines.extend([
+        f"• سرعت: {convert_size(speed)}/s", # برای FFmpeg، این "نرخ پردازش" را به شکل بایت نمایش می‌دهد
+        f"• زمان سپری‌شده: {elapsed_time}s",
+        f"• زمان باقی‌مانده: {eta}s"
+    ])
+    text = "\n".join(lines)
+
     try:
-        # جلوگیری از ویرایش پیام با متن یکسان برای کاهش بار API
-        if status_message.text != text:
+        if hasattr(status_message, 'text') and status_message.text != text:
             await status_message.edit(text)
-    except Exception as e:
-        # print(f"خطا در به‌روزرسانی نوار پیشرفت: {e}") # برای دیباگ
+        elif not hasattr(status_message, 'text'):
+             await status_message.edit(text)
+    except Exception:
         pass
 
-# تابع جدید برای دریافت مدت زمان ویدیو
 async def get_video_duration(video_path):
-    """مدت زمان ویدیو را به ثانیه با استفاده از ffprobe دریافت می‌کند."""
     try:
         command = [
             "ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -88,13 +114,11 @@ async def get_video_duration(video_path):
                 data = json.loads(stdout.decode())
                 if 'format' in data and 'duration' in data['format']:
                     return float(data['format']['duration'])
-                elif 'duration' in data: # بررسی مستقیم کلید duration
+                elif 'duration' in data:
                      return float(data['duration'])
             except json.JSONDecodeError:
                 print(f"خطا در تجزیه JSON از ffprobe: {stdout.decode()}")
 
-        # تلاش مجدد با فرمت خروجی دیگر در صورت عدم موفقیت فرمت json
-        # این بخش برای اطمینان بیشتر است
         print(f"تلاش با فرمت default برای ffprobe. خطای قبلی (اگر بود): {stderr.decode() if stderr else 'N/A'}")
         command_fallback = [
             "ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -117,7 +141,6 @@ async def get_video_duration(video_path):
         print(f"استثنا در get_video_duration: {e}")
     return None
 
-# تابع اصلاح‌شده برای پردازش ویدیو با واترمارک
 async def process_video_with_watermark(input_path, output_path, status_message, start_time_overall):
     total_duration_seconds = await get_video_duration(input_path)
 
@@ -143,7 +166,7 @@ async def process_video_with_watermark(input_path, output_path, status_message, 
     )
 
     last_update_time = time.time()
-    # start_time_overall مربوط به شروع کل عملیات (دانلود + واترمارک) است
+    # متغیر ffmpeg_current_output_bytes دیگر برای نمایش حجم در نوار پیشرفت واترمارک لازم نیست
 
     while True:
         line_bytes = await process.stdout.readline()
@@ -151,33 +174,42 @@ async def process_video_with_watermark(input_path, output_path, status_message, 
             break
         
         line = line_bytes.decode('utf-8', errors='ignore').strip()
-        # print(f"FFMPEG_PROGRESS_LINE: {line}") # برای دیباگ
-
+        
         current_time_seconds = None
         
-        if line.startswith("out_time_us="): # میکروثانیه
+        if line.startswith("out_time_us="):
             try:
                 microseconds = int(line.split('=')[1])
                 current_time_seconds = microseconds / 1000000.0
             except ValueError:
                 print(f"ناتوان در تجزیه out_time_us: {line}")
-        elif line.startswith("out_time_ms="): # میلی‌ثانیه
+        elif line.startswith("out_time_ms="):
             try:
                 milliseconds = int(line.split('=')[1])
                 current_time_seconds = milliseconds / 1000.0
             except ValueError:
                 print(f"ناتوان در تجزیه out_time_ms: {line}")
+        # تجزیه total_size دیگر برای نمایش در نوار پیشرفت لازم نیست
+        # elif line.startswith("total_size="):
+        #     pass 
         
         if current_time_seconds is not None and total_duration_seconds > 0:
-            if time.time() - last_update_time > 1.0: # به‌روزرسانی هر ۱ ثانیه
-                await progress_bar(current_time_seconds, total_duration_seconds, status_message, "در حال افزودن واترمارک...", start_time_overall)
+            if time.time() - last_update_time > 5.0: # به‌روزرسانی هر ۵ ثانیه
+                await progress_bar(
+                    current_time_seconds, total_duration_seconds, 
+                    status_message, "در حال افزودن واترمارک...", start_time_overall
+                    # آرگومان‌های display_bytes ارسال نمی‌شوند
+                )
                 last_update_time = time.time()
         
         elif line.startswith("progress=end"):
             if total_duration_seconds > 0:
-                 await progress_bar(total_duration_seconds, total_duration_seconds, status_message, "واترمارک در حال اتمام...", start_time_overall)
+                await progress_bar(
+                    total_duration_seconds, total_duration_seconds,
+                    status_message, "واترمارک در حال اتمام...", start_time_overall
+                    # آرگومان‌های display_bytes ارسال نمی‌شوند
+                )
             print("پیشرفت FFmpeg پایان یافت.")
-            # اجازه دهید حلقه با EOF طبیعی stdout تمام شود یا communicate() آن را مدیریت کند.
 
     stdout_data, stderr_data = await process.communicate()
     
@@ -194,53 +226,55 @@ async def process_video_with_watermark(input_path, output_path, status_message, 
         raise Exception(error_message)
     else:
         if total_duration_seconds > 0:
-            await progress_bar(total_duration_seconds, total_duration_seconds, status_message, "واترمارک کامل شد.", start_time_overall)
-        else:
-            await status_message.edit("واترمارک کامل شد (پیشرفت دقیق در دسترس نبود).")
+            await progress_bar(
+                total_duration_seconds, total_duration_seconds,
+                status_message, "واترمارک کامل شد.", start_time_overall
+                # آرگومان‌های display_bytes ارسال نمی‌شوند
+            )
+        else: 
+            final_output_size_str = ""
+            if os.path.exists(output_path):
+                final_output_size_str = f" حجم فایل خروجی: {convert_size(os.path.getsize(output_path))}"
+            await status_message.edit(f"واترمارک کامل شد.{final_output_size_str}")
 
 
 @app.on_message(filters.video & filters.private)
 async def add_watermark(client: Client, message: Message):
     status = await message.reply("در حال آماده‌سازی...")
-    temp_input_path, temp_output_path = None, None # مقداردهی اولیه
+    temp_input_path, temp_output_path = None, None
     try:
-        start_time = time.time() # زمان شروع کل عملیات
+        start_time = time.time()
 
-        # دانلود فایل به دیسک
         await status.edit("در حال دانلود فایل...")
         temp_input_path = await message.download(
             in_memory=False,
             progress=progress_bar,
-            progress_args=(status, "در حال دانلود...", start_time)
+            progress_args=(status, "در حال دانلود...", start_time) 
         )
         if not temp_input_path or not os.path.exists(temp_input_path):
             return await status.edit("خطا در دانلود فایل.")
 
-        # تولید نام فایل خروجی در دیسک
         base, ext = os.path.splitext(os.path.basename(temp_input_path))
         temp_output_path = f"wm_{base}{ext}"
 
-
-        # پردازش ویدیو با افزودن واترمارک
-        await status.edit("در حال افزودن واترمارک...") # پیام اولیه قبل از شروع پردازش ffmpeg
+        await status.edit("در حال افزودن واترمارک...") 
         await process_video_with_watermark(temp_input_path, temp_output_path, status, start_time)
 
-        # چک کردن موجود بودن فایل خروجی
         if not os.path.isfile(temp_output_path):
-            # این پیام ممکن است توسط خطای ffmpeg در process_video_with_watermark پوشش داده شود
             return await status.edit(f"فایل خروجی پس از واترمارک ایجاد نشد. مسیر مورد انتظار: {temp_output_path}")
 
-        # آپلود فایل واترمارک‌دار
-        upload_start_time = time.time() # زمان شروع آپلود برای نمایش دقیق‌تر پیشرفت آپلود
+        upload_start_time = time.time()
         await status.edit("در حال آپلود فایل واترمارک‌دار...")
         
+        caption_text = "✅ ویدیو با واترمارک ارسال شد."
+
         try:
             await message.reply_video(
                 video=temp_output_path,
-                caption="✅ ویدیو با واترمارک ارسال شد.\nProcessed by @YourBotName", # نام ربات خود را جایگزین کنید
+                caption=caption_text,
                 supports_streaming=True,
                 progress=progress_bar,
-                progress_args=(status, "در حال آپلود...", upload_start_time) # استفاده از زمان شروع آپلود
+                progress_args=(status, "در حال آپلود...", upload_start_time) 
             )
             await status.delete()
         except Exception as e:
@@ -249,10 +283,13 @@ async def add_watermark(client: Client, message: Message):
 
     except Exception as e:
         print(f"خطا در پردازش کلی: {e}")
-        await status.edit(f"خطا در پردازش: {str(e)}")
+        if status :
+            try:
+                await status.edit(f"خطا در پردازش: {str(e)}")
+            except: # ممکن است پیام قبلا حذف شده باشد یا خطای دیگری رخ دهد
+                pass
 
     finally:
-        # حذف فایل‌های موقت
         if temp_input_path and os.path.exists(temp_input_path):
             try:
                 os.remove(temp_input_path)
@@ -265,11 +302,9 @@ async def add_watermark(client: Client, message: Message):
                 print(f"خطا در حذف فایل خروجی موقت: {e_remove}")
 
 if __name__ == "__main__":
-    # اجرای Flask در یک Thread جداگانه
     flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True # اطمینان از بسته شدن ترد با برنامه اصلی
+    flask_thread.daemon = True
     flask_thread.start()
     
-    # اجرای ربات
     print("ربات واترمارک در حال اجرا است...")
     app.run()
