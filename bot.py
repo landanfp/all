@@ -42,6 +42,35 @@ def convert_size(size_bytes):
     s = round(size_bytes / p, 2)
     return f"{s} {size_name[i]}"
 
+# فرمت دهی زمان
+def format_time(seconds):
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        remaining_seconds = int(seconds % 60)
+        return f"{minutes}m, {remaining_seconds}s"
+    elif seconds < 86400:
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        remaining_seconds = int(seconds % 60)
+        return f"{hours}h, {minutes}m, {remaining_seconds}s"
+    else:
+        days = int(seconds // 86400)
+        hours = int((seconds % 86400) // 3600)
+        minutes = int((seconds % 3600) % 60 // 60)
+        remaining_seconds = int(seconds % 60)
+        time_parts = []
+        if days > 0:
+            time_parts.append(f"{days}d")
+        if hours > 0:
+            time_parts.append(f"{hours}h")
+        if minutes > 0:
+            time_parts.append(f"{minutes}m")
+        if remaining_seconds >= 0 or not time_parts:
+            time_parts.append(f"{remaining_seconds}s")
+        return ", ".join(time_parts)
+
 # نوار پیشرفت
 async def progress_bar(
     current_val, total_val, status_message, action, start,
@@ -51,18 +80,18 @@ async def progress_bar(
     diff = now - start if now - start > 0 else 0.001
     percentage = current_val * 100 / total_val if total_val > 0 else 0
     speed = current_val / diff if diff > 0 else 0
-    
+
     elapsed_time = round(diff)
     eta = round((total_val - current_val) / speed) if speed > 0 and total_val > 0 else 0
-    
+
     if current_val >= total_val and total_val > 0 :
         percentage = 100.00
         eta = 0
-        
+
     bar_length = 15
     filled_length = int(bar_length * percentage / 100)
     bar = "█" * filled_length + "░" * (bar_length - filled_length)
-    
+
     lines = [
         action,
         f"[{bar}] {percentage:.2f}%"
@@ -72,16 +101,16 @@ async def progress_bar(
     if (action.startswith("در حال دانلود") or action.startswith("در حال آپلود")) and total_val > 0:
         size_text_line = f"• حجم: {convert_size(current_val)} / {convert_size(total_val)}"
     elif display_bytes_current is not None and display_bytes_total is not None and display_bytes_total > 0:
-         current_bytes_to_display = min(display_bytes_current, display_bytes_total)
-         size_text_line = f"• حجم: {convert_size(current_bytes_to_display)} / {convert_size(display_bytes_total)}"
+        current_bytes_to_display = min(display_bytes_current, display_bytes_total)
+        size_text_line = f"• حجم: {convert_size(current_bytes_to_display)} / {convert_size(display_bytes_total)}"
 
     if size_text_line:
         lines.append(size_text_line)
-    
+
     lines.extend([
         f"• سرعت: {convert_size(speed)}/s",
-        f"• زمان سپری‌شده: {elapsed_time}s",
-        f"• زمان باقی‌مانده: {eta}s"
+        f"• زمان سپری‌شده: {format_time(elapsed_time)}",
+        f"• زمان باقی‌مانده: {format_time(eta)}"
     ])
     text = "\n".join(lines)
 
@@ -89,7 +118,7 @@ async def progress_bar(
         if hasattr(status_message, 'text') and status_message.text != text:
             await status_message.edit(text)
         elif not hasattr(status_message, 'text'):
-             await status_message.edit(text)
+            await status_message.edit(text)
     except Exception:
         pass
 
@@ -114,7 +143,7 @@ async def get_video_duration(video_path):
                 if 'format' in data and 'duration' in data['format']:
                     return float(data['format']['duration'])
                 elif 'duration' in data: # برای برخی فرمت‌های json دیگر
-                     return float(data['duration'])
+                    return float(data['duration'])
             except json.JSONDecodeError:
                 print(f"خطا در تجزیه JSON از ffprobe (duration): {stdout.decode()}")
 
@@ -133,11 +162,11 @@ async def get_video_duration(video_path):
             try:
                 return float(stdout_fallback.decode().strip())
             except ValueError:
-                 print(f"خطا در تبدیل خروجی ffprobe (default) به float: {stdout_fallback.decode().strip()}")
+                print(f"خطا در تبدیل خروجی ffprobe (default) به float: {stdout_fallback.decode().strip()}")
         else:
             # پرینت stderr اصلی اگر fallback هم شکست خورد
             print(f"خطا در دریافت مدت زمان با ffprobe (default): {stderr.decode() if stderr else (stderr_fallback.decode() if stderr_fallback else 'N/A')}")
-            
+
     except FileNotFoundError:
         print("خطا: ffprobe پیدا نشد. لطفاً از نصب بودن FFmpeg (شامل ffprobe) و در دسترس بودن آن در PATH اطمینان حاصل کنید.")
     except Exception as e:
@@ -178,7 +207,7 @@ async def generate_thumbnail(video_path, output_dir, seek_time_str="00:00:03.000
     if not video_path or not os.path.exists(video_path):
         print(f"فایل ویدیو برای generate_thumbnail یافت نشد: {video_path}")
         return None
-        
+
     thumbnail_filename = os.path.splitext(os.path.basename(video_path))[0] + ".jpg"
     thumbnail_path = os.path.join(output_dir, thumbnail_filename)
 
@@ -190,12 +219,12 @@ async def generate_thumbnail(video_path, output_dir, seek_time_str="00:00:03.000
             h, m, s_full = current_seek_time.split(':')
             s, ms_str = s_full.split('.') if '.' in s_full else (s_full, "0")
             seek_seconds_requested = int(h) * 3600 + int(m) * 60 + float(s) + float(ms_str) / 1000
-            
+
             if seek_seconds_requested >= duration or seek_seconds_requested < 0:
                 seek_seconds_actual = duration / 4.0
             else:
                 seek_seconds_actual = seek_seconds_requested
-            
+
             seek_s_int = int(seek_seconds_actual)
             seek_ms_int = int((seek_seconds_actual - seek_s_int) * 1000)
             current_seek_time = f"{seek_s_int // 3600:02d}:{ (seek_s_int % 3600) // 60:02d}:{seek_s_int % 60:02d}.{seek_ms_int:03d}"
@@ -239,7 +268,7 @@ async def process_video_with_watermark(input_path, output_path, status_message, 
     total_duration_seconds = await get_video_duration(input_path)
 
     if total_duration_seconds is None:
-        total_duration_seconds = 0 
+        total_duration_seconds = 0
         print("هشدار: دریافت مدت زمان ویدیو ممکن نبود.")
 
     command = [
@@ -250,7 +279,7 @@ async def process_video_with_watermark(input_path, output_path, status_message, 
         "-y",
         output_path
     ]
-    
+
     print(f"دستور FFmpeg: {' '.join(command)}")
     process = await asyncio.create_subprocess_exec(
         *command,
@@ -271,9 +300,9 @@ async def process_video_with_watermark(input_path, output_path, status_message, 
         elif line.startswith("out_time_ms="):
             try: milliseconds = int(line.split('=')[1]); current_time_seconds = milliseconds / 1000.0
             except ValueError: print(f"ناتوان در تجزیه out_time_ms: {line}")
-        
+
         if current_time_seconds is not None and total_duration_seconds > 0:
-            if time.time() - last_update_time > 5.0: 
+            if time.time() - last_update_time > 5.0:
                 await progress_bar(current_time_seconds, total_duration_seconds, status_message, "در حال افزودن واترمارک...", start_time_overall)
                 last_update_time = time.time()
         elif line.startswith("progress=end"):
@@ -293,7 +322,7 @@ async def process_video_with_watermark(input_path, output_path, status_message, 
     else:
         if total_duration_seconds > 0:
             await progress_bar(total_duration_seconds, total_duration_seconds, status_message, "واترمارک کامل شد.", start_time_overall)
-        else: 
+        else:
             final_output_size_str = ""
             if os.path.exists(output_path): final_output_size_str = f" حجم فایل خروجی: {convert_size(os.path.getsize(output_path))}"
             await status_message.edit(f"واترمارک کامل شد.{final_output_size_str}")
@@ -302,7 +331,7 @@ async def process_video_with_watermark(input_path, output_path, status_message, 
 async def add_watermark(client: Client, message: Message):
     status = await message.reply("در حال آماده‌سازی...")
     temp_input_path, temp_output_path, thumbnail_file_path = None, None, None
-    
+
     # ایجاد دایرکتوری موقت برای فایل‌ها
     temp_dir = os.path.join("downloads", str(message.chat.id), str(message.id))
     if not os.path.exists(temp_dir):
@@ -318,7 +347,7 @@ async def add_watermark(client: Client, message: Message):
             file_name=os.path.join(temp_dir, input_filename),
             in_memory=False,
             progress=progress_bar,
-            progress_args=(status, "در حال دانلود...", start_time) 
+            progress_args=(status, "در حال دانلود...", start_time)
         )
         if not temp_input_path or not os.path.exists(temp_input_path):
             return await status.edit("خطا در دانلود فایل.")
@@ -327,7 +356,7 @@ async def add_watermark(client: Client, message: Message):
         temp_output_filename = f"wm_{base}{ext}"
         temp_output_path = os.path.join(temp_dir, temp_output_filename)
 
-        await status.edit("در حال افزودن واترمارک...") 
+        await status.edit("در حال افزودن واترمارک...")
         await process_video_with_watermark(temp_input_path, temp_output_path, status, start_time)
 
         if not os.path.isfile(temp_output_path):
@@ -345,18 +374,28 @@ async def add_watermark(client: Client, message: Message):
 
         upload_start_time = time.time()
         await status.edit("در حال آپلود فایل واترمارک‌دار...")
-        
+
         caption_text = "✅ ویدیو با واترمارک ارسال شد."
         video_duration_for_upload = await get_video_duration(temp_output_path)
         video_width, video_height = await get_video_dimensions(temp_output_path)
 
         try:
-            await message.reply_video(
-                video=temp_output_path, caption=caption_text, supports_streaming=True,
+            output_base, output_ext = os.path.splitext(os.path.basename(temp_output_path))
+            final_filename = f"{output_base}_[@farshidband]{output_ext}"
+            # نیازی به تغییر نام فایل فیزیکی نیست، فقط نامی که هنگام آپلود استفاده می‌شود مهم است.
+
+            await client.send_video(
+                chat_id=message.chat.id,
+                video=temp_output_path,
+                caption=caption_text,
+                supports_streaming=True,
                 duration=int(video_duration_for_upload) if video_duration_for_upload and video_duration_for_upload > 0 else 0,
-                width=video_width if video_width > 0 else 0, height=video_height if video_height > 0 else 0,
+                width=video_width if video_width > 0 else 0,
+                height=video_height if video_height > 0 else 0,
                 thumb=thumbnail_file_path,
-                progress=progress_bar, progress_args=(status, "در حال آپلود...", upload_start_time) 
+                file_name=final_filename, # تغییر نام فایل هنگام آپلود
+                progress=progress_bar,
+                progress_args=(status, "در حال آپلود...", upload_start_time)
             )
             await status.delete()
         except Exception as e:
@@ -378,14 +417,14 @@ async def add_watermark(client: Client, message: Message):
         if temp_input_path and os.path.exists(temp_input_path):
             try: os.remove(temp_input_path); print(f"فایل ورودی موقت حذف شد: {temp_input_path}")
             except Exception as e_rem: print(f"خطا در حذف ورودی: {e_rem}")
-        
+
         # تلاش برای حذف دایرکتوری موقت اگر خالی باشد
         try:
             if os.path.exists(temp_dir) and not os.listdir(temp_dir): # اگر خالی است
                 os.rmdir(temp_dir)
                 print(f"دایرکتوری موقت حذف شد: {temp_dir}")
             elif os.path.exists(temp_dir): # اگر خالی نیست، هشدار بده
-                 print(f"هشدار: دایرکتوری موقت {temp_dir} خالی نیست و حذف نشد.")
+                print(f"هشدار: دایرکتوری موقت {temp_dir} خالی نیست و حذف نشد.")
         except Exception as e_rmdir:
             print(f"خطا در حذف دایرکتوری موقت {temp_dir}: {e_rmdir}")
 
@@ -393,10 +432,10 @@ async def add_watermark(client: Client, message: Message):
 if __name__ == "__main__":
     if not os.path.exists("downloads"): # اطمینان از وجود دایرکتوری دانلودها در شروع
         os.makedirs("downloads")
-        
+
     flask_thread = Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
-    
+
     print("ربات واترمارک در حال اجرا است...")
     app.run()
