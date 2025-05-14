@@ -1,111 +1,127 @@
 import os
-import subprocess
-import asyncio
-import time
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from PIL import Image, ImageFilter
 
+# تنظیمات ربات - مقادیر خودت رو جایگزین کن
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
 
 
-bot = Client("compressor_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("image_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 
-def get_duration(file_path):
-    """گرفتن طول ویدیو به ثانیه"""
-    result = subprocess.run([
-        "ffprobe", "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        file_path
-    ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    return float(result.stdout.decode().strip())
+# ذخیره اطلاعات کاربران
+user_data = {}  # ساختار: {user_id: {"path": "file.jpg", "actions": set()}}
 
-def parse_time_to_sec(time_str):
-    """تبدیل زمان 00:01:23.45 به ثانیه"""
-    h, m, s = time_str.strip().split(":")
-    return float(h) * 3600 + float(m) * 60 + float(s)
+# هندل پیام عکس
+@app.on_message(filters.photo)
+async def handle_photo(client, message):
+    user_id = message.from_user.id
+    file_path = f"{user_id}_original.jpg"
+    await message.download(file_path)
+    
+    user_data[user_id] = {"path": file_path, "actions": set()}
 
-def progress_bar(percent):
-    filled = int(percent / 5)
-    return f"[{'█' * filled}{'░' * (20 - filled)}] {int(percent)}%"
-
-async def compress_with_progress(input_file, output_file, duration, message: Message):
-    process = subprocess.Popen([
-        "ffmpeg", "-i", input_file,
-        "-vcodec", "libx264", "-crf", "28",
-        "-preset", "slow", "-acodec", "aac", "-b:a", "128k",
-        "-progress", "pipe:1", "-nostats", output_file
-    ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-    percent = 0
-    while True:
-        line = process.stdout.readline()
-        if not line:
-            break
-
-        line = line.decode("utf-8").strip()
-        if "out_time=" in line:
-            out_time_str = line.split('=')[1]
-            current_time = parse_time_to_sec(out_time_str)
-            percent = min(current_time / duration * 100, 100)
-            bar = progress_bar(percent)
-            try:
-                await message.edit_text(f"در حال کاهش حجم...\n{bar}")
-            except:
-                pass
-
-    process.wait()
-
-@bot.on_message(filters.video)
-async def handle_video(client, message):
-    info_msg = await message.reply_text("در حال دریافت ویدیو...")
-
-    start_time = time.time()
-    file_path = await message.download(progress=download_progress, progress_args=(info_msg, start_time))
-
-    await info_msg.edit_text("در حال تحلیل ویدیو...")
-
-    duration = get_duration(file_path)
-    output_path = "compressed_" + os.path.basename(file_path)
-
-    await compress_with_progress(file_path, output_path, duration, info_msg)
-
-    await info_msg.edit_text("کاهش حجم کامل شد. در حال آپلود...")
-
-    start_upload = time.time()
-    await message.reply_video(
-        output_path,
-        caption="ویدیو با موفقیت فشرده شد!",
-        progress=upload_progress,
-        progress_args=(info_msg, start_upload)
+    # دکمه‌ها
+    buttons = [
+        [InlineKeyboardButton("افزایش کیفیت", callback_data="upscale")],
+        [InlineKeyboardButton("تبدیل به Marvel", callback_data="marvel")],
+        [InlineKeyboardButton("حذف پس‌زمینه", callback_data="remove_bg")],
+        [InlineKeyboardButton("کارتونی کن", callback_data="cartoon")],
+    ]
+    await message.reply(
+        "کدام عملیات‌ها را می‌خواهی انجام دهم؟",
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-    await info_msg.delete()
-    os.remove(file_path)
-    os.remove(output_path)
+# هندل کلیک روی دکمه‌ها
+@app.on_callback_query()
+async def handle_callback(client, callback_query):
+    user_id = callback_query.from_user.id
+    action = callback_query.data
 
-# توابع پیشرفت برای دانلود و آپلود
-def progress_bar_simple(current, total):
-    percent = int(current * 100 / total)
-    bar = "█" * (percent // 5) + "░" * (20 - percent // 5)
-    return f"[{bar}] {percent}%"
+    if user_id not in user_data:
+        await callback_query.answer("اول باید عکسی بفرستی.")
+        return
 
-async def download_progress(current, total, message, start):
-    elapsed = int(time.time() - start)
-    text = f"در حال دریافت فایل...\n{progress_bar_simple(current, total)}\nزمان سپری‌شده: {elapsed}s"
+    if action == "start":
+        await start_processing(client, callback_query)
+        return
+
+    user_data[user_id]["actions"].add(action)
+    await callback_query.answer("اضافه شد.")
+
+    # دکمه شروع نمایش بده
+    if len(user_data[user_id]["actions"]) >= 1:
+        await callback_query.message.reply(
+            "برای شروع پردازش، روی دکمه زیر کلیک کن:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("شروع پردازش", callback_data="start")]])
+        )
+
+# پردازش عکس
+async def start_processing(client, callback_query):
+    user_id = callback_query.from_user.id
+    data = user_data.get(user_id)
+
+    if not data:
+        await callback_query.answer("خطا در پردازش.")
+        return
+
+    input_path = data["path"]
+    actions = data["actions"]
+    current_path = input_path
+
+    await callback_query.message.reply("در حال پردازش تصویر...")
+
     try:
-        await message.edit_text(text)
+        # افزایش کیفیت (نمونه ساده)
+        if "upscale" in actions:
+            img = Image.open(current_path)
+            img = img.resize((img.width * 2, img.height * 2))
+            current_path = f"{user_id}_upscaled.jpg"
+            img.save(current_path)
+
+        # حذف پس‌زمینه (نمونه ساده با سفیدبُری)
+        if "remove_bg" in actions:
+            img = Image.open(current_path).convert("RGBA")
+            datas = img.getdata()
+            new_data = []
+            for item in datas:
+                if item[0] > 240 and item[1] > 240 and item[2] > 240:
+                    new_data.append((255, 255, 255, 0))
+                else:
+                    new_data.append(item)
+            img.putdata(new_data)
+            current_path = f"{user_id}_nobg.png"
+            img.save(current_path)
+
+        # کارتونی کردن (نمونه ساده)
+        if "cartoon" in actions:
+            img = Image.open(current_path).convert("RGB")
+            img = img.filter(ImageFilter.EDGE_ENHANCE)
+            current_path = f"{user_id}_cartoon.jpg"
+            img.save(current_path)
+
+        # تبدیل به Marvel (در آینده می‌تونی Stable Diffusion وصل کنی)
+        if "marvel" in actions:
+            img = Image.open(current_path)
+            current_path = f"{user_id}_marvel.jpg"
+            img.save(current_path)
+
+        # ارسال فایل نهایی
+        await client.send_document(user_id, current_path, caption="پردازش کامل شد!")
+
+    except Exception as e:
+        await callback_query.message.reply(f"خطا در پردازش: {e}")
+    
+    # پاکسازی فایل‌ها
+    try:
+        os.remove(data["path"])
+        os.remove(current_path)
     except:
         pass
+    del user_data[user_id]
 
-async def upload_progress(current, total, message, start):
-    elapsed = int(time.time() - start)
-    text = f"در حال آپلود فایل...\n{progress_bar_simple(current, total)}\nزمان سپری‌شده: {elapsed}s"
-    try:
-        await message.edit_text(text)
-    except:
-        pass
-
-bot.run()
+# اجرای ربات
+app.run()
