@@ -1,12 +1,3 @@
 
 pyrogram==2.0.106
-tgcrypto 
-moviepy
-pillow
-gtts
-pydub
-zipfile36
-aiofiles
-aiohttp
-uvicorn
-fastapi
+tgcrypto==1.2.5
