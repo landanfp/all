@@ -1,29 +1,18 @@
-# تانمبینل آخرش میچسبه
-
+# bot.py
 from pyrogram import Client, filters
 from pyrogram.types import Message
 import os
 import asyncio
 import time
-import math
-# import subprocess # به طور مستقیم استفاده نمی‌شود
 from flask import Flask
 from threading import Thread
-import json
-
-# فایل‌های helper
-from helper.display_progress import progress_bar, convert_size
-from helper.ffmpeg import (
-    get_video_duration,
-    get_video_dimensions,
-    generate_thumbnail,
-    process_video_with_watermark
-)
+from watermark import process_video_with_watermark, generate_thumbnail, get_video_duration, get_video_dimensions
+from display import progress_bar
 
 # اطلاعات ربات (لطفاً با مقادیر واقعی خود جایگزین کنید)
-API_ID = '3335796'
-API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
+API_ID = 'YOUR_API_ID'
+API_HASH = 'YOUR_API_HASH'
+BOT_TOKEN = 'YOUR_BOT_TOKEN'
 
 app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -36,6 +25,10 @@ def home_route():
 def run_flask():
     port = int(os.environ.get("PORT", 8000))
     flask_app.run(host="0.0.0.0", port=port)
+
+@app.on_message(filters.command("start") & filters.private)
+async def start_command(client: Client, message: Message):
+    await message.reply_text("سلام! برای افزودن واترمارک به ویدیوی خود، آن را برای من ارسال کنید.")
 
 @app.on_message(filters.video & filters.private)
 async def add_watermark(client: Client, message: Message):
@@ -78,7 +71,6 @@ async def add_watermark(client: Client, message: Message):
             if thumbnail_file_path: await status.edit("تامبنیل با موفقیت تولید شد.")
             else: await status.edit("خطا در تولید تامبنیل، آپلود بدون تامبنیل سفارشی انجام می‌شود.")
         except Exception as e_thumb:
-            print(f"استثنا هنگام تولید تامبنیل: {e_thumb}")
             await status.edit("خطا در تولید تامبنیل، آپلود بدون تامبنیل سفارشی انجام می‌شود.")
             thumbnail_file_path = None
 
@@ -98,36 +90,30 @@ async def add_watermark(client: Client, message: Message):
                 progress=progress_bar, progress_args=(status, "در حال آپلود...", upload_start_time)
             )
             await status.delete()
+            print("✅ پردازش و ارسال ویدیو با موفقیت انجام شد.")
         except Exception as e:
-            print(f"خطا در آپلود فایل: {e}"); await status.edit(f"خطا در آپلود فایل: {str(e)}")
+            await status.edit(f"خطا در آپلود فایل: {str(e)}")
     except Exception as e:
-        print(f"خطا در پردازش کلی: {e}")
-        if status:
-            try: await status.edit(f"خطا در پردازش: {str(e)}")
-            except: pass
+        await status.edit(f"خطا در پردازش: {str(e)}")
     finally:
         # پاکسازی فایل‌های موقت و دایرکتوری
-        # ابتدا فایل‌ها، سپس دایرکتوری اگر خالی باشد
         if thumbnail_file_path and os.path.exists(thumbnail_file_path):
-            try: os.remove(thumbnail_file_path); print(f"فایل تامبنیل موقت حذف شد: {thumbnail_file_path}")
-            except Exception as e_rem: print(f"خطا در حذف تامبنیل: {e_rem}")
+            try: os.remove(thumbnail_file_path)
+            except Exception: pass
         if temp_output_path and os.path.exists(temp_output_path):
-            try: os.remove(temp_output_path); print(f"فایل خروجی موقت حذف شد: {temp_output_path}")
-            except Exception as e_rem: print(f"خطا در حذف خروجی: {e_rem}")
+            try: os.remove(temp_output_path)
+            except Exception: pass
         if temp_input_path and os.path.exists(temp_input_path):
-            try: os.remove(temp_input_path); print(f"فایل ورودی موقت حذف شد: {temp_input_path}")
-            except Exception as e_rem: print(f"خطا در حذف ورودی: {e_rem}")
+            try: os.remove(temp_input_path)
+            except Exception: pass
 
-        # تلاش برای حذف دایرکتوری موقت اگر خالی باشد
         try:
-            if os.path.exists(temp_dir) and not os.listdir(temp_dir): # اگر خالی است
+            if os.path.exists(temp_dir) and not os.listdir(temp_dir):
                 os.rmdir(temp_dir)
-                print(f"دایرکتوری موقت حذف شد: {temp_dir}")
-            elif os.path.exists(temp_dir): # اگر خالی نیست، هشدار بده
-                 print(f"هشدار: دایرکتوری موقت {temp_dir} خالی نیست و حذف نشد.")
-        except Exception as e_rmdir:
-            print(f"خطا در حذف دایرکتوری موقت {temp_dir}: {e_rmdir}")
-
+            elif os.path.exists(temp_dir):
+                pass # دایرکتوری غیر خالی است، حذف نمی‌شود
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     if not os.path.exists("downloads"): # اطمینان از وجود دایرکتوری دانلودها در شروع
