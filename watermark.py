@@ -2,6 +2,7 @@
 import os
 import asyncio
 import json
+import time
 from display import convert_size, progress_bar
 
 async def get_video_duration(video_path):
