@@ -9,8 +9,7 @@ API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 app = Client("watermark_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 
 # لود کردن پلاگین‌ها
-app.load_plugin("plugins.start")
-app.load_plugin("plugins.text_watermark")
-app.load_plugin("plugins.image_watermark")
+app.load_plugins("plugins")
+
 
 app.run()
