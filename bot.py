@@ -17,7 +17,7 @@ from plugins.text_watermark import (
 )
 from plugins.start import start_handler
 
-BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
+BOT_TOKEN = '7136875110:AAFzyr2i2FbRrmst1sklkJPN7Yz2rXJvSew'
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 
