@@ -31,6 +31,7 @@ async def handle_text_input(client, message: Message):
 async def set_position(client, query: CallbackQuery):
     position = query.data.split("_")[-1]
     set_state(query.from_user.id, "position", position)
+    print(f"موقعیت انتخاب شده (متن): {position}")  # اضافه کردن برای بررسی
     set_state(query.from_user.id, "step", "size")
     size_buttons = [
         [InlineKeyboardButton(f"{s}%", callback_data=f"text_size_{s}") for s in sizes[i:i+5]]
