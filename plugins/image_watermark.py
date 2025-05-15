@@ -6,6 +6,14 @@ from helper.progress import progress_bar
 import os
 import time
 
+positions = [
+    ("top_right", "بالا راست"), ("top_center", "بالا وسط"), ("top_left", "بالا چپ"),
+    ("center_right", "وسط راست"), ("center", "وسط"), ("center_left", "وسط چپ"),
+    ("bottom_right", "پایین راست"), ("bottom_center", "پایین وسط"), ("bottom_left", "پایین چپ")
+]
+
+sizes = [10, 15, 20, 25, 30, 35, 40, 45, 50]
+
 @Client.on_callback_query(filters.regex("image_wm"))
 async def ask_image(client, query: CallbackQuery):
     await query.message.edit("لطفا تصویری برای واترمارک ارسال کنید (فقط jpg یا png):")
