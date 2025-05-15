@@ -1,24 +1,18 @@
-# استفاده از نسخه سبک پایتون
+# Base image
 FROM python:3.10-slim
 
-# تنظیم دایرکتوری کاری
+# Set work directory
 WORKDIR /app
 
-# نصب پکیج‌های سیستمی لازم
-RUN apt-get update && apt-get install -y \\
-    git \\
-    ffmpeg \\
-    libgl1-mesa-glx \\
-    && rm -rf /var/lib/apt/lists/*
+# Install dependencies
+RUN apt update && apt install -y ffmpeg && \
+    pip install --no-cache-dir --upgrade pip
 
-# کپی فایل‌های پروژه به کانتینر
-COPY requirements.txt .
-
-# نصب پکیج‌های پایتون
-RUN pip install --no-cache-dir -r requirements.txt
-
-# کپی باقی فایل‌ها (مثل bot.py)
+# Copy project files
 COPY . .
 
-# اجرای ربات
+# Install Python requirements
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Start the bot
 CMD ["python", "bot.py"]
