@@ -3,7 +3,7 @@ from pyrogram import Client
 #from pyrogram import Client
 from pyrogram import idle
 from pyrogram.handlers import MessageHandler
-from plugin import   # این مهمه
+from plugins import image_watermark, text_watermark, start   # این مهمه
 
 BOT_TOKEN = '6964975788:AAH3OrL9aXHuoIUliY6TJbKqTeR__X5p4H8'
 API_ID = '3335796' 
