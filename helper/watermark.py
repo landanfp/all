@@ -20,7 +20,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     )
 
     cmd = f"ffmpeg -i \"{input_path}\" -vf \"{drawtext}\" -codec:a copy \"{output_path}\" -y"
-    process = await asyncio.create_subprocess_shell(cmd)  # حذف await اینجا
+    process = await asyncio.create_subprocess_shell(cmd)
     await process.communicate()
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
@@ -41,5 +41,5 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-filter_complex \"[1]scale=iw*{size_percent/100}:ih*{size_percent/100}[wm];[0][wm]overlay={position_map[position]}\" "
         f"-codec:a copy \"{output_path}\" -y"
     )
-    process = await asyncio.create_subprocess_shell(cmd) # حذف await اینجا
+    process = await asyncio.create_subprocess_shell(cmd)
     await process.communicate()
