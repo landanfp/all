@@ -16,7 +16,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
 
     drawtext = (
         f"drawtext=text='{text}':fontcolor=white:fontsize=h*{size_percent}/100:"
-        f"x={position_map[position]}:y=(if(y\,y\,0))"
+        f"x={position_map[position]}:y=(if(y,y,0))"
     )
 
     cmd = f"ffmpeg -i \"{input_path}\" -vf \"{drawtext}\" -codec:a copy \"{output_path}\" -y"
