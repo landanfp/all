@@ -75,7 +75,21 @@ async def handle_video(client, message: Message):
     await msg.edit("آپلود فایل...")
     await message.reply_video(output_file, caption="ویدیوی واترمارک‌خورده آماده شد!")
 
+    # بررسی وجود فایل خروجی (اضافه شده برای دیباگ)
+    if not os.path.exists(output_file):
+        print(f"فایل خروجی وجود ندارد: {output_file}")
+    else:
+        print(f"فایل خروجی وجود دارد: {output_file}")
+        # تلاش برای دانلود فایل خروجی (اضافه شده برای دیباگ)
+        try:
+            await client.download_media(output_file, file_name="downloaded_output.mp4")
+            print(f"فایل خروجی در downloaded_output.mp4 دانلود شد.")
+        except Exception as e:
+            print(f"خطا در دانلود فایل خروجی: {e}")
+
+    # حذف فایل‌ها بعد از (تلاش برای) ارسال و دیباگ
     os.remove(input_file)
-    os.remove(output_file)
+    if os.path.exists(output_file):
+        os.remove(output_file)
     clear_state(message.from_user.id)
     await msg.delete()
