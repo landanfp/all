@@ -7,9 +7,15 @@ import os
 import time
 
 positions = [
-    ("top_right", "بالا راست"), ("top_center", "بالا وسط"), ("top_left", "بالا چپ"),
-    ("center_right", "وسط راست"), ("center", "وسط"), ("center_left", "وسط چپ"),
-    ("bottom_right", "پایین راست"), ("bottom_center", "پایین وسط"), ("bottom_left", "پایین چپ")
+    ("top_right", "بالا راست"),
+    ("top_center", "بالا وسط"),
+    ("top_left", "بالا چپ"),
+    ("center_right", "وسط راست"),
+    ("center", "وسط"),
+    ("center_left", "وسط چپ"),
+    ("bottom_right", "پایین راست"),
+    ("bottom_center", "پایین وسط"),
+    ("bottom_left", "پایین چپ")
 ]
 
 sizes = [10, 15, 20, 25, 30, 35, 40, 45, 50]
@@ -31,7 +37,7 @@ async def handle_text_input(client, message: Message):
 async def set_position(client, query: CallbackQuery):
     position = query.data.split("_")[-1]
     set_state(query.from_user.id, "position", position)
-    print(f"موقعیت انتخاب شده (متن): {position}")  # اضافه کردن برای بررسی
+    print(f"موقعیت انتخاب شده (متن): {position}")
     set_state(query.from_user.id, "step", "size")
     size_buttons = [
         [InlineKeyboardButton(f"{s}%", callback_data=f"text_size_{s}") for s in sizes[i:i+5]]
