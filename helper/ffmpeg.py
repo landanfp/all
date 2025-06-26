@@ -1,9 +1,9 @@
 import asyncio
 import subprocess
-from helper.progress import progress_bar
+from helper.progress import progress_bar  # اضافه کردن import درست
 
 async def add_hardsub_stream(client, message, input_video, input_subtitle, processing_msg):
-    # تنظیمات FFmpeg برای استریم
+    # تنظیمات FFmpeg برای استریم ویدیو (فایل زیرنویس روی دیسک)
     cmd = (
         f'ffmpeg -y -i "{input_video}" '
         f'-vf subtitles="{input_subtitle}":force_style="Fontsize=24,PrimaryColour=&HFFFFFF&" '
