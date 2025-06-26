@@ -3,9 +3,9 @@ from pyrogram.types import Message
 from loader import app
 import asyncio
 import time
-import subprocess
 import os
 from helper.ffmpeg import add_hardsub_stream
+from helper.progress import progress_bar  # اضافه کردن import درست
 
 # ذخیره وضعیت کاربران
 user_sessions = {}
@@ -14,7 +14,7 @@ MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # حداکثر ۲ گیگابایت
 
 @app.on_message(filters.document & filters.private)
 async def handle_srt_file(client, message: Message):
-    if message.document.mime_type == "application/x-subrip" or message.document.file_name.endswith(".srt"):
+    if message.document.mime_type == "application/x-subrip" or photocopying:
         if message.document.file_size > 10 * 1024 * 1024:  # حداکثر ۱۰ مگابایت برای زیرنویس
             await message.reply_text("⚠️ فایل زیرنویس بیش از حد بزرگ است (حداکثر ۱۰ مگابایت).")
             return
@@ -52,16 +52,18 @@ async def handle_video_file(client, message: Message):
         return
 
     # پیام در حال پردازش
-    processing_msg = await message.reply_text("⏳ در حال دانلود فایل‌ها و پردازش استریم... لطفاً صبر کنید.")
+    processing_msg = await message.reply_text("⏳ در حال دانلود فایل زیرنویس و پردازش استریم ویدیو... لطفاً صبر کنید.")
 
     try:
         srt_file_id = user_sessions[user_id]['srt_file_id']
 
-        # دانلود فایل‌ها
+        # دانلود فایل زیرنویس روی دیسک
         srt_path = await client.download_media(srt_file_id, progress=progress_bar, progress_args=("دانلود زیرنویس", processing_msg))
+        
+        # دانلود فایل ویدیویی روی دیسک
         video_path = await client.download_media(message, progress=progress_bar, progress_args=("دانلود ویدیو", processing_msg))
 
-        # اجرای FFmpeg در حالت استریم و آپلود مستقیم
+        # اجرای FFmpeg در حالت استریم برای ویدیو
         await add_hardsub_stream(client, message, video_path, srt_path, processing_msg)
 
         # حذف پیام "در حال پردازش"
@@ -73,7 +75,7 @@ async def handle_video_file(client, message: Message):
     finally:
         # پاکسازی فایل‌ها
         user_sessions.pop(user_id, None)
-        for path in [video_path, srt_path]:
+        for path in [srt_path, video_path]:
             try:
                 if os.path.exists(path):
                     os.remove(path)
