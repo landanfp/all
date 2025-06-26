@@ -7,9 +7,8 @@ import os
 from helper.ffmpeg import add_hardsub
 from helper.progress import progress_bar
 
-# ذخیره وضعیت کاربران
 user_sessions = {}
-SESSION_TIMEOUT = 300  # ۵ دقیقه
+SESSION_TIMEOUT = 300
 
 @app.on_message(filters.document & filters.private)
 async def handle_srt_file(client, message: Message):
@@ -24,7 +23,7 @@ async def handle_srt_file(client, message: Message):
         try:
             srt_path = await client.download_media(
                 message.document.file_id,
-                file_name=f"subtitle_{user_id}.srt",  # نام منحصربه‌فرد
+                file_name=f"subtitle_{user_id}.srt",
                 progress=progress_bar,
                 progress_args=("دانلود زیرنویس", processing_msg)
             )
@@ -72,7 +71,7 @@ async def handle_video_file(client, message: Message):
         srt_path = user_sessions[user_id]['srt_path']
         video_path = await client.download_media(
             message,
-            file_name=f"video_{user_id}.mp4",  # نام منحصربه‌فرد
+            file_name=f"video_{user_id}.mp4",
             progress=progress_bar,
             progress_args=("دانلود ویدیو", processing_msg)
         )
@@ -87,7 +86,7 @@ async def handle_video_file(client, message: Message):
         success, ffmpeg_error = await add_hardsub(video_path, srt_path, output_path, processing_msg)
 
         if not success:
-            await processing_msg.edit_text(f"❌ خطا در پردازش ffmpeg: {ffmpeg_error}")
+            await processing_msg.edit_text(f"❌ خطا در پردازش ffmpeg:\n{ffmpeg_error}")
             print(f"خطای ffmpeg برای کاربر {user_id}: {ffmpeg_error}")
             return
 
