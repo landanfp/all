@@ -11,14 +11,19 @@ async def add_hardsub(input_video, input_subtitle, output_video, message):
     process = await asyncio.create_subprocess_shell(
         cmd,
         stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
+        stderr=asyncio.subprocess.PIPE  # گرفتن خطاها
     )
     
     total_duration = None
     last_progress = 0
-    
+    error_output = []
+
+    # خواندن خروجی و خطاها
     while True:
         line = await process.stdout.readline()
+        error_line = await process.stderr.readline()
+        if error_line:
+            error_output.append(error_line.decode().strip())
         if not line:
             break
         line = line.decode().strip()
@@ -44,3 +49,8 @@ async def add_hardsub(input_video, input_subtitle, output_video, message):
                     )
     
     await process.communicate()
+    
+    # اگر خطایی وجود داشت، آن را برگردان
+    if error_output:
+        return False, "\n".join(error_output)
+    return True, None
