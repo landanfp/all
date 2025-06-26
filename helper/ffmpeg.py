@@ -1,6 +1,5 @@
 import asyncio
 import subprocess
-from helper.progress import progress_bar  # اضافه کردن import درست
 
 async def add_hardsub_stream(client, message, input_video, input_subtitle, processing_msg):
     # تنظیمات FFmpeg برای استریم ویدیو (فایل زیرنویس روی دیسک)
@@ -10,6 +9,7 @@ async def add_hardsub_stream(client, message, input_video, input_subtitle, proce
         f'-preset ultrafast -threads 1 -maxrate 2000k -bufsize 4000k '
         f'-c:v libx264 -c:a aac -b:a 128k -f mp4 pipe:'
     )
+    print(f"[DEBUG] FFmpeg command: {cmd}")
     try:
         proc = await asyncio.create_subprocess_shell(
             cmd,
@@ -21,10 +21,9 @@ async def add_hardsub_stream(client, message, input_video, input_subtitle, proce
         await client.send_video(
             chat_id=message.chat.id,
             video=proc.stdout,
-            caption="✅ ویدیو با زیرنویس اضافه شده آماده است!",
-            progress=progress_bar,
-            progress_args=("آپلود استریم ویدیو", processing_msg)
+            caption="✅ ویدیو با زیرنویس اضافه شده آماده است!"
         )
+        print(f"[DEBUG] Video uploaded successfully")
 
         # گرفتن خطاهای احتمالی
         _, stderr = await proc.communicate()
@@ -32,4 +31,5 @@ async def add_hardsub_stream(client, message, input_video, input_subtitle, proce
             raise Exception(f"FFmpeg error: {stderr.decode()}")
 
     except Exception as e:
+        print(f"[DEBUG] FFmpeg error: {str(e)}")
         raise Exception(f"خطا در پردازش استریم FFmpeg: {str(e)}")
