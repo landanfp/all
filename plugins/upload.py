@@ -7,7 +7,6 @@ import os
 async def catch_subtitle(client, message):
     user_id = message.from_user.id
 
-    # بررسی اینکه آیا کاربر قبلاً فایل .srt ارسال کرده
     if user_id in user_sessions:
         await message.reply_text("⚠️ شما قبلاً یک فایل زیرنویس ارسال کرده‌اید. لطفاً ویدیوی خود را ارسال کنید.")
         return
@@ -16,17 +15,15 @@ async def catch_subtitle(client, message):
         processing_msg = await message.reply_text("⏳ در حال دانلود زیرنویس...")
         try:
             srt_path = await message.download(
-                file_name=f"subtitle_{user_id}.srt",  # استفاده از user_id برای جلوگیری از تداخل
+                file_name=f"subtitle_{user_id}.srt",
                 progress=progress_bar,
                 progress_args=("دانلود زیرنویس", processing_msg)
             )
             
-            # بررسی وجود و حجم فایل
             if not srt_path or not os.path.exists(srt_path) or os.path.getsize(srt_path) == 0:
                 await processing_msg.edit_text("❌ خطا: فایل زیرنویس دانلود نشد یا خالی است. لطفاً فایل معتبر دیگری ارسال کنید.")
                 return
 
-            # ذخیره اطلاعات فایل srt
             user_sessions[user_id] = {
                 'srt_path': srt_path,
                 'timestamp': time.time()
