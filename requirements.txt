@@ -3,3 +3,4 @@ tgcrypto
 ffmpeg-python
 fastapi
 uvicorn
+tqdm
