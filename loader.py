@@ -3,7 +3,7 @@ import os
 
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '6975247999:AAEaK2CYU4FpgZ8ruW8ZxzXfGQ9dsXuepuw'
+BOT_TOKEN = '6964975788:AAGLGffeJmdNVhCEangvn0GnnGK_0zWngDU'
 LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
 plugins = dict(root="plugins")
