@@ -2,6 +2,7 @@ from pyrogram import Client, filters
 from helper.progress import progress_bar
 from loader import app
 import os
+from hardsub import user_sessions
 
 @app.on_message(filters.document & filters.private)
 async def catch_subtitle(client, message):
