@@ -13,23 +13,31 @@ SESSION_TIMEOUT = 300  # ۵ دقیقه
 
 @app.on_message(filters.document & filters.private)
 async def handle_srt_file(client, message: Message):
-    if message.document.mime_type == "application/x-subrip" or message.document.file_name.endswith(".srt"):
-        user_id = message.from_user.id
-        now = time.time()
+    user_id = message.from_user.id
 
+    # بررسی اینکه آیا کاربر قبلاً فایل .srt ارسال کرده
+    if user_id in user_sessions:
+        await message.reply_text("⚠️ شما قبلاً یک فایل زیرنویس ارسال کرده‌اید. لطفاً ویدیوی خود را ارسال کنید.")
+        return
+
+    if message.document.mime_type == "application/x-subrip" or message.document.file_name.endswith(".srt"):
         processing_msg = await message.reply_text("⏳ در حال دانلود زیرنویس...")
         try:
-            srt_path = await client.download_media(message.document.file_id, progress=progress_bar, progress_args=("دانلود زیرنویس", processing_msg))
+            srt_path = await client.download_media(
+                message.document.file_id,
+                progress=progress_bar,
+                progress_args=("دانلود زیرنویس", processing_msg)
+            )
             
             # بررسی وجود و حجم فایل
-            if not os.path.exists(srt_path) or os.path.getsize(srt_path) == 0:
-                await processing_msg.edit_text("❌ خطا: فایل زیرنویس دانلود نشد یا خالی است. لطفاً دوباره امتحان کنید.")
+            if not srt_path or not os.path.exists(srt_path) or os.path.getsize(srt_path) == 0:
+                await processing_msg.edit_text("❌ خطا: فایل زیرنویس دانلود نشد یا خالی است. لطفاً فایل معتبر دیگری ارسال کنید.")
                 return
 
             # ذخیره اطلاعات فایل srt
             user_sessions[user_id] = {
                 'srt_path': srt_path,
-                'timestamp': now
+                'timestamp': time.time()
             }
 
             await processing_msg.edit_text("✅ فایل زیرنویس دریافت شد. حالا لطفاً ویدیوی خود را ارسال کنید.")
@@ -40,6 +48,8 @@ async def handle_srt_file(client, message: Message):
         except Exception as e:
             await processing_msg.edit_text(f"❌ خطایی در دانلود زیرنویس رخ داد: {str(e)}")
             print(f"خطا در دانلود زیرنویس برای کاربر {user_id}: {str(e)}")
+    else:
+        await message.reply_text("⚠️ لطفاً فقط فایل زیرنویس با فرمت .srt ارسال کنید.")
 
 async def expire_session(user_id):
     await asyncio.sleep(SESSION_TIMEOUT)
@@ -56,6 +66,7 @@ async def expire_session(user_id):
 async def handle_video_file(client, message: Message):
     user_id = message.from_user.id
 
+    # بررسی اینکه آیا فایل زیرنویس قبلاً ارسال شده
     if user_id not in user_sessions or 'srt_path' not in user_sessions[user_id]:
         await message.reply_text("⚠️ ابتدا باید فایل زیرنویس (.srt) را ارسال کنید.")
         return
@@ -65,10 +76,14 @@ async def handle_video_file(client, message: Message):
 
     try:
         srt_path = user_sessions[user_id]['srt_path']
-        video_path = await client.download_media(message, progress=progress_bar, progress_args=("دانلود ویدیو", processing_msg))
+        video_path = await client.download_media(
+            message,
+            progress=progress_bar,
+            progress_args=("دانلود ویدیو", processing_msg)
+        )
 
         # بررسی وجود و حجم فایل ویدیویی
-        if not os.path.exists(video_path) or os.path.getsize(video_path) == 0:
+        if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) == 0:
             await processing_msg.edit_text("❌ خطا: فایل ویدیویی دانلود نشد یا خالی است. لطفاً دوباره امتحان کنید.")
             return
 
