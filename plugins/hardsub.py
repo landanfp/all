@@ -4,7 +4,7 @@ from loader import app
 import asyncio
 import time
 import os
-from helper.ffmpeg import add_hardsub_stream
+from helper.ffmpeg import add_hardsub
 
 # ذخیره وضعیت کاربران
 user_sessions = {}
@@ -51,7 +51,7 @@ async def handle_video_file(client, message: Message):
         return
 
     # پیام در حال پردازش
-    processing_msg = await message.reply_text("⏳ در حال دانلود فایل زیرنویس و پردازش استریم ویدیو... لطفاً صبر کنید.")
+    processing_msg = await message.reply_text("⏳ در حال دانلود فایل‌ها و پردازش... لطفاً صبر کنید.")
     print(f"[DEBUG] Starting video processing for user {user_id}")
 
     try:
@@ -65,9 +65,19 @@ async def handle_video_file(client, message: Message):
         video_path = await client.download_media(message)
         print(f"[DEBUG] Video downloaded: {video_path}")
 
-        # اجرای FFmpeg در حالت استریم برای ویدیو
-        await add_hardsub_stream(client, message, video_path, srt_path, processing_msg)
-        print(f"[DEBUG] Video processing completed for user {user_id}")
+        # مسیر فایل خروجی
+        output_path = f"hardsub_{user_id}_{int(time.time())}.mp4"
+
+        # اجرای FFmpeg برای چسباندن زیرنویس
+        await add_hardsub(video_path, srt_path, output_path)
+        print(f"[DEBUG] FFmpeg processing completed, output: {output_path}")
+
+        # ارسال ویدیو نهایی
+        await message.reply_video(
+            video=output_path,
+            caption="✅ ویدیو با زیرنویس اضافه شده آماده است!"
+        )
+        print(f"[DEBUG] Video uploaded successfully")
 
         # حذف پیام "در حال پردازش"
         await processing_msg.delete()
@@ -79,7 +89,7 @@ async def handle_video_file(client, message: Message):
     finally:
         # پاکسازی فایل‌ها
         user_sessions.pop(user_id, None)
-        for path in [srt_path, video_path]:
+        for path in [srt_path, video_path, output_path]:
             try:
                 if os.path.exists(path):
                     os.remove(path)
