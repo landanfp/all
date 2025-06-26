@@ -5,7 +5,7 @@ from tqdm import tqdm
 async def progress_bar(current, total, text, message):
     now = time.time()
     percent = current * 100 / total
-    filled = int(20 * percent // 100)  # نوار با طول 20
+    filled = int(20 * percent // 100)
     bar = '█' * filled + '-' * (20 - filled)
     
     speed = current / (now - message.date.timestamp()) if (now - message.date.timestamp()) > 0 else 0
@@ -19,12 +19,11 @@ async def progress_bar(current, total, text, message):
         f"زمان باقی‌مانده: {eta:.1f} ثانیه"
     )
     
-    # فقط اگر متن تغییر کرده باشد یا حداقل 1 ثانیه گذشته باشد، پیام را ویرایش کن
     if not hasattr(message, '_last_text') or message._last_text != new_text:
         try:
             await message.edit_text(new_text)
-            message._last_text = new_text  # ذخیره متن فعلی
-            await asyncio.sleep(1)  # فاصله 1 ثانیه برای جلوگیری از اسپم
+            message._last_text = new_text
+            await asyncio.sleep(1)
         except Exception as e:
             if "MESSAGE_NOT_MODIFIED" not in str(e):
                 print(f"خطا در ویرایش پیام پیشرفت: {e}")
