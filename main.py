@@ -19,5 +19,5 @@ def run_server():
 # شروع سرور
 threading.Thread(target=run_server).start()
 
-# اجرای اپلیکیشن پایروگرام
+# اجرای اپلیکیشن پایروگرام 
 app.run()
