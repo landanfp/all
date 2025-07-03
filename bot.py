@@ -4,10 +4,12 @@ import os
 from moviepy.editor import VideoFileClip, CompositeVideoClip, ImageClip
 from helpers import progress_bar
 
-bot = Client("watermark_bot",
-             api_id=123456,  # جایگزین با API ID
-             api_hash="your_api_hash",  # جایگزین با API Hash
-             bot_token="your_bot_token")  # جایگزین با توکن ربات
+API_ID = '3335796'
+API_HASH = '138b992a0e672e8346d8439c3f42ea78'
+BOT_TOKEN = '7136875110:AAGr1EREy_qPMgxVbuE4B0cHGVcwWudOrus'
+#LOG_CHANNEL = -1001792962793  # مقدار دلخواه
+
+app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 WATERMARK_FILE = "1.jpg"
 
