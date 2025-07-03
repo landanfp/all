@@ -7,11 +7,11 @@ import humanize
 import asyncio
 
 # Bot configuration
-api_id = "YOUR_API_ID"  # Replace with your API ID
-api_hash = "YOUR_API_HASH"  # Replace with your API Hash
-bot_token = "YOUR_BOT_TOKEN"  # Replace with your Bot Token
+api_id = "3335796"
+api_hash = "138b992a0e672e8346d8439c3f42ea78"
+bot_token = "7136875110:AAFzyr2i2FbRrmst1sklkJPN7Yz2rXJvSew"
 
-app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
+app = Client("wmark", api_id=api_id, api_hash=api_hash, bot_token=bot_token) 
 
 # Function to add watermarks to video (placeholder for video watermarking)
 async def add_watermarks_to_video(video_path, output_path):
