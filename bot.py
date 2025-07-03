@@ -1,12 +1,15 @@
 import os
 import asyncio
+import threading
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from moviepy.editor import VideoFileClip, CompositeVideoClip, ImageClip
 from helpers import progress_bar  # فرض بر اینه که فایل helpers.py داری برای نمایش پیشرفت
-import threading
+
 from fastapi import FastAPI
 import uvicorn
+
+
 # ─────── تنظیمات ─────── #
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
@@ -16,8 +19,17 @@ BOT_TOKEN = '1396293494:AAFY7RXygNEZPFPXfmoJ66SljlXeCSilXG0'
 bot = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 WATERMARK_IMAGE = "1.jpg"  # تصویر واترمارک
-# FastAPI app برای پاسخ دادن به Health Check
-# ─────── ساخت کلاینت ─────── #
+
+# ─────── FastAPI برای Health Check ─────── #
+app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"status": "ok"}
+
+def run_api():
+    uvicorn.run(app, host="0.0.0.0", port=8080)
+
 
 # ─────── هندلر پیام ویدیو ─────── #
 @bot.on_message(filters.video & filters.private)
@@ -77,22 +89,13 @@ async def watermark_handler(client: Client, message: Message):
         if os.path.exists(output_path):
             os.remove(output_path)
 
-# FastAPI app برای پاسخ دادن به Health Check
-api = FastAPI()
 
-@api.get("/")
-async def root():
-    return {"message": "Bot is running."}
-
-# اجرای سرور در یک ترد جدا
-def run_server():
-    uvicorn.run(api, host="0.0.0.0", port=8000)
-
-# شروع سرور
-threading.Thread(target=run_server).start()
-# ─────── اجرای ربات ─────── #
+# ─────── اجرای ربات و FastAPI ─────── #
 if __name__ == "__main__":
     print("🤖 Bot is running...")
 
+    # اجرای FastAPI در یک Thread جداگانه
+    threading.Thread(target=run_api, daemon=True).start()
 
+    # اجرای ربات تلگرام (مسدود کننده)
     bot.run()
