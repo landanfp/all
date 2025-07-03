@@ -1,28 +1,39 @@
+import math
 import time
 
-async def progress_bar(current, total, msg_type, message):
+async def progress_bar(current, total, message, status_text):
     now = time.time()
-    if not hasattr(progress_bar, "last_time"):
-        progress_bar.last_time = now
+    diff = now - getattr(message, 'last_progress', now)
+    if diff < 1:
+        return
 
-    if now - progress_bar.last_time > 1:
-        progress_bar.last_time = now
-        percent = current * 100 / total
-        bar = "█" * int(percent / 5) + "░" * (20 - int(percent / 5))
-        speed = current / (now - message.date.timestamp() + 1)
-        eta = (total - current) / speed if speed != 0 else 0
-        await message.reply_text(
-            f"{msg_type}...\n"
-            f"{bar} {percent:.2f}%\n"
-            f"{human_readable(current)} / {human_readable(total)}\n"
-            f"📶 سرعت: {human_readable(speed)}/s\n"
-            f"⏳ زمان باقی‌مانده: {int(eta)} ثانیه", 
-            quote=True
-        )
+    percentage = current * 100 / total
+    bar_length = 20
+    filled = int(bar_length * current / total)
+    bar = "█" * filled + "░" * (bar_length - filled)
+
+    speed = current / diff / 1024  # KB/s
+    elapsed = int(diff)
+    try:
+        eta = int((total - current) / (current / elapsed))
+    except:
+        eta = 0
+
+    await status_text.edit(
+        f"{message.text}\n"
+        f"[{bar}] {percentage:.2f}%\n"
+        f"📦 {human_readable(current)} / {human_readable(total)}\n"
+        f"⚡️ {speed:.2f} KB/s | ⏳ {eta}s"
+    )
+
+    message.last_progress = now
 
 def human_readable(size):
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size < 1024:
-            return f"{size:.2f} {unit}"
-        size /= 1024
-    return f"{size:.2f} TB"
+    if size < 1024:
+        return f"{size} B"
+    elif size < 1024**2:
+        return f"{size / 1024:.2f} KB"
+    elif size < 1024**3:
+        return f"{size / 1024**2:.2f} MB"
+    else:
+        return f"{size / 1024**3:.2f} GB"
