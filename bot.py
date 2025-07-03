@@ -17,9 +17,9 @@ app = Client(
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
-    max_concurrent_transmissions=20,  # Increase concurrent transmissions
-    download_chunk_size=1048576,  # 1MB chunks for faster download
-    upload_chunk_size=1048576  # 1MB chunks for faster upload
+   # max_concurrent_transmissions=20,  # Increase concurrent transmissions
+    #download_chunk_size=1048576,  # 1MB chunks for faster download
+    #upload_chunk_size=1048576  # 1MB chunks for faster upload
 )
 
 # Function to add watermarks to video using ffmpeg
