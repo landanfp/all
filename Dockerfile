@@ -1,27 +1,29 @@
-# مرحله 1: تصویر پایه
-FROM python:3.11-slim
+FROM python:3.9-slim
 
-# تنظیم متغیر محیطی برای جلوگیری از خطای interactive
-ENV DEBIAN_FRONTEND=noninteractive
-
-# نصب وابستگی‌های سیستمی مورد نیاز برای ffmpeg و moviepy
+# نصب ابزارهای مورد نیاز
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    libsm6 \
+    imagemagick \
+    libx11-6 \
     libxext6 \
-    libxrender-dev \
-    && apt-get clean \
+    libsm6 \
     && rm -rf /var/lib/apt/lists/*
 
-# ایجاد فولدر کاری
+# تنظیم مسیر کاری
 WORKDIR /app
 
-# کپی کردن فایل‌های پروژه
+# کپی پروژه داخل کانتینر
 COPY . /app
 
-# نصب وابستگی‌های پایتون
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir pyrogram tgcrypto moviepy
+# نصب MoviePy و پکیج‌های مورد نیازش
+RUN pip install --upgrade pip
+RUN pip install moviepy==1.0.3 imageio-ffmpeg==0.4.5
 
-# اجرای ربات
+# نصب سایر وابستگی‌ها
+RUN pip install --no-cache-dir -r requirements.txt
+
+# تست نصب moviepy (اختیاری ولی مفیده برای لاگ)
+RUN python -c "from moviepy.editor import VideoFileClip; print('MoviePy installed successfully.')"
+
+# اجرای برنامه اصلی
 CMD ["python", "bot.py"]
