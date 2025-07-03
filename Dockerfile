@@ -1,19 +1,27 @@
-# Use official Python 3.10 slim image as base
-FROM python:3.10-slim
+# مرحله 1: تصویر پایه
+FROM python:3.11-slim
 
-# Set working directory
+# تنظیم متغیر محیطی برای جلوگیری از خطای interactive
+ENV DEBIAN_FRONTEND=noninteractive
+
+# نصب وابستگی‌های سیستمی مورد نیاز برای ffmpeg و moviepy
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# ایجاد فولدر کاری
 WORKDIR /app
 
-# Copy requirements file
-COPY requirements.txt .
+# کپی کردن فایل‌های پروژه
+COPY . /app
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# نصب وابستگی‌های پایتون
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir pyrogram tgcrypto moviepy
 
-# Copy bot script and watermark images
-COPY bot.py .
-COPY 1.jpg .
-COPY 2.jpg .
-
-# Command to run the bot
-CMD ["python", "bot.py"]
+# اجرای ربات
+CMD ["python", "main.py"]
