@@ -1,41 +1,47 @@
 import os
 import time
+import ffmpeg
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from PIL import Image, ImageDraw, ImageFont
 import humanize
 import asyncio
 
 # Bot configuration
-api_id = "3335796"
-api_hash = "138b992a0e672e8346d8439c3f42ea78"
-bot_token = "7136875110:AAFzyr2i2FbRrmst1sklkJPN7Yz2rXJvSew"
+API_ID = '3335796'
+API_HASH = '138b992a0e672e8346d8439c3f42ea78'
+BOT_TOKEN = '5355055672:AAHoidc0x6nM3g2JHmb7xhWKmwGJOoKFNXY'
+#LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
-app = Client("wmark", api_id=api_id, api_hash=api_hash, bot_token=bot_token) 
+app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Function to add watermarks to video (placeholder for video watermarking)
+# Function to add watermarks to video using ffmpeg
 async def add_watermarks_to_video(video_path, output_path):
     try:
-        # For simplicity, we'll assume watermarking on a single frame for demonstration
-        # In a real scenario, you'd use a library like moviepy or ffmpeg for video
-        # Here, we simulate watermarking by applying it to a dummy image
-        img = Image.new('RGB', (1280, 720), color='black')  # Placeholder for video frame
-        watermark1 = Image.open("1.jpg").resize((30, 30))  # Top-right watermark
-        watermark2 = Image.open("2.jpg")  # Bottom-center watermark
+        # Ensure watermark images exist
+        if not os.path.exists("1.jpg") or not os.path.exists("2.jpg"):
+            return False
 
-        # Paste watermark1 at top-right
-        img.paste(watermark1, (img.width - 30, 0), watermark1 if watermark1.mode == 'RGBA' else None)
-        
-        # Paste watermark2 at bottom-center
-        watermark2 = watermark2.resize((int(watermark2.width * 0.5), int(watermark2.height * 0.5)))  # Scale if needed
-        x = (img.width - watermark2.width) // 2
-        y = img.height - watermark2.height
-        img.paste(watermark2, (x, y), watermark2 if watermark2.mode == 'RGBA' else None)
+        # Input video stream
+        video = ffmpeg.input(video_path)
 
-        # Save the dummy frame (in real case, apply to video)
-        img.save("temp_frame.jpg")
-        # For actual video watermarking, use ffmpeg or moviepy
-        os.rename(video_path, output_path)  # Placeholder: assume video is processed
+        # Watermark 1: Top-right, 30px width
+        watermark1 = ffmpeg.input("1.jpg").filter("scale", 30, -1)  # Scale to 30px width
+        # Watermark 2: Bottom-center
+        watermark2 = ffmpeg.input("2.jpg").filter("scale", -1, -1)  # Keep original size or adjust as needed
+
+        # Get video dimensions
+        probe = ffmpeg.probe(video_path)
+        video_width = int(probe['streams'][0]['width'])
+        video_height = int(probe['streams'][0]['height'])
+
+        # Overlay watermark1 at top-right (10px padding from edges)
+        video = ffmpeg.overlay(video, watermark1, x=video_width-40, y=10)
+
+        # Overlay watermark2 at bottom-center
+        video = ffmpeg.overlay(video, watermark2, x=(video_width-ffmpeg.probe("2.jpg")['streams'][0]['width'])//2, y=video_height-ffmpeg.probe("2.jpg")['streams'][0]['height']-10)
+
+        # Output the video with watermarks
+        ffmpeg.output(video, output_path, c='copy', vcodec='libx264', acodec='aac').run(overwrite_output=True)
         return True
     except Exception as e:
         print(f"Error in watermarking: {e}")
