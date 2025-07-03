@@ -47,7 +47,7 @@ async def watermark_handler(client: Client, message: Message):
         video = VideoFileClip(input_path)
         watermark = (
             ImageClip(WATERMARK_IMAGE)
-            .resize(height=30)  # سایز واترمارک 30 پیکسل
+            .resize(height=300)  # سایز واترمارک 30 پیکسل
             .set_position(("right", "top"))  # بالا سمت راست
             .set_duration(video.duration)
         )
