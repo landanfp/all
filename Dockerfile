@@ -24,4 +24,4 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir pyrogram tgcrypto moviepy
 
 # اجرای ربات
-CMD ["python", "main.py"]
+CMD ["python", "bot.py"]
