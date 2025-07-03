@@ -1,7 +1,7 @@
 import os
 import time
 import logging
-import cv2
+#import cv2
 import numpy as np
 from PIL import Image
 from hachoir.parser import createParser
