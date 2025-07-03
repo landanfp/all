@@ -2,3 +2,5 @@ Pyrogram==2.0.106
 tgcrypto 
 moviepy 
 pillow==9.5.0
+fastapi
+uvicorn
