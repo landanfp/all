@@ -1,4 +1,4 @@
-Pyrogram==2.0.106 
-tgcrypto 
-Pillow==10.4.0 
+Pyrogram==2.0.106
+Pillow==10.4.0
 humanize==4.11.0
+ffmpeg-python==0.2.0
