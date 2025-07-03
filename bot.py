@@ -6,13 +6,21 @@ from pyrogram.types import Message
 import humanize
 import asyncio
 
-# Bot configuration
+# Bot configuration with optimized settings
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 BOT_TOKEN = '7136875110:AAGr1EREy_qPMgxVbuE4B0cHGVcwWudOrus'
 #LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
-app = Client("watermark_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client(
+    "my_bot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN,
+    max_concurrent_transmissions=20,  # Increase concurrent transmissions
+    download_chunk_size=1048576,  # 1MB chunks for faster download
+    upload_chunk_size=1048576  # 1MB chunks for faster upload
+)
 
 # Function to add watermarks to video using ffmpeg
 async def add_watermarks_to_video(video_path, output_path):
@@ -40,8 +48,8 @@ async def add_watermarks_to_video(video_path, output_path):
         # Overlay watermark2 at bottom-center
         video = ffmpeg.overlay(video, watermark2, x=(video_width-ffmpeg.probe("2.jpg")['streams'][0]['width'])//2, y=video_height-ffmpeg.probe("2.jpg")['streams'][0]['height']-10)
 
-        # Output the video with watermarks
-        ffmpeg.output(video, output_path, c='copy', vcodec='libx264', acodec='aac').run(overwrite_output=True)
+        # Output the video with watermarks (fast encoding with lower quality for speed)
+        ffmpeg.output(video, output_path, c='copy', vcodec='libx264', preset='ultrafast', crf=28, acodec='aac').run(overwrite_output=True)
         return True
     except Exception as e:
         print(f"Error in watermarking: {e}")
@@ -56,8 +64,16 @@ def progress_bar(current, total):
     return f"[{bar}] {percentage:.1f}%"
 
 # Download progress callback
+last_update = 0
 async def download_progress(current, total, message, start_time):
-    elapsed = time.time() - start_time
+    global last_update
+    current_time = time.time()
+    # Update progress only every 3 seconds to reduce overhead
+    if current_time - last_update < 3:
+        return
+    last_update = current_time
+
+    elapsed = current_time - start_time
     speed = current / elapsed if elapsed > 0 else 0
     downloaded = humanize.naturalsize(current)
     total_size = humanize.naturalsize(total)
@@ -70,6 +86,13 @@ async def download_progress(current, total, message, start_time):
 
 # Upload progress callback
 async def upload_progress(current, total, message):
+    global last_update
+    current_time = time.time()
+    # Update progress only every 3 seconds
+    if current_time - last_update < 3:
+        return
+    last_update = current_time
+
     bar = progress_bar(current, total)
     text = f"Uploading:\n{bar}"
     try:
@@ -85,6 +108,8 @@ async def start_command(client, message: Message):
 # Video handler
 @app.on_message(filters.video)
 async def handle_video(client, message: Message):
+    global last_update
+    last_update = time.time()
     status_message = await message.reply_text("Starting download...")
     start_time = time.time()
     
