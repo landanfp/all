@@ -64,38 +64,55 @@ async def handle_video_file(client, message: Message):
             '-y', output_path
         ]
         
-        # اجرای فرآیند FFmpeg
         process = await asyncio.create_subprocess_exec(
             *ffmpeg_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
-
+        
         last_update_time = time.time()
-        while True:
-            # خواندن خطوط خروجی FFmpeg
-            line = await process.stderr.readline()
-            if not line:
+        last_time_str = "00:00:00.00"
+        last_speed_str = "0.00x"
+        last_message_text = ""
+        
+        while process.returncode is None: # حلقه تا زمانی که فرآیند در حال اجراست
+            try:
+                # تلاش برای خواندن یک خط جدید با timeout کوتاه
+                line = await asyncio.wait_for(process.stderr.readline(), timeout=0.1)
+                
+                if line:
+                    line_str = line.decode('utf-8')
+                    
+                    # جستجو برای زمان و سرعت در خروجی FFmpeg
+                    time_match = re.search(r'time=(\d{2}:\d{2}:\d{2}.\d{2})', line_str)
+                    speed_match = re.search(r'speed=(\d+\.?\d*x)', line_str)
+                    
+                    if time_match and speed_match:
+                        last_time_str = time_match.group(1)
+                        last_speed_str = speed_match.group(1)
+
+            except asyncio.TimeoutError:
+                # اگر در 0.1 ثانیه خط جدیدی نبود، به حلقه ادامه بده
+                pass
+            
+            except ValueError:
+                # در صورت خطای احتمالی، از حلقه خارج شو
                 break
-            
-            line_str = line.decode('utf-8')
-            
-            # جستجو برای زمان و سرعت در خروجی FFmpeg
-            time_match = re.search(r'time=(\d{2}:\d{2}:\d{2}.\d{2})', line_str)
-            speed_match = re.search(r'speed=(\d+\.?\d*x)', line_str)
 
-            if time_match and speed_match:
-                # اگر ۳ ثانیه از آخرین به‌روزرسانی گذشته، پیام را ویرایش کن
-                if time.time() - last_update_time >= 3:
-                    current_time = time_match.group(1)
-                    speed = speed_match.group(1)
-                    await processing_msg.edit_text(
-                        f"⏳ در حال هاردساب... \n"
-                        f"مدت زمان هاردساب شده: **{current_time}** \n"
-                        f"سرعت: **{speed}**"
-                    )
-                    last_update_time = time.time()
-
+            # اگر ۳ ثانیه از آخرین به‌روزرسانی گذشته، پیام را ویرایش کن
+            if time.time() - last_update_time >= 3:
+                new_message_text = (
+                    f"⏳ در حال هاردساب... \n"
+                    f"مدت زمان هاردساب شده: **{last_time_str}** \n"
+                    f"سرعت: **{last_speed_str}**"
+                )
+                
+                if new_message_text != last_message_text:
+                    await processing_msg.edit_text(new_message_text)
+                    last_message_text = new_message_text
+                
+                last_update_time = time.time()
+                
         # منتظر ماندن تا فرآیند FFmpeg به پایان برسد
         await process.wait()
 
@@ -111,7 +128,7 @@ async def handle_video_file(client, message: Message):
             caption="✅ ویدیو با زیرنویس اضافه شده آماده است!"
         )
 
-        # حذف پیام وضعیت (اختیاری)
+        # حذف پیام وضعیت
         await processing_msg.delete()
 
     except Exception as e:
