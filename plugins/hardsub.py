@@ -73,6 +73,7 @@ async def handle_video_file(client, message: Message):
         last_update_time = time.time()
         last_time_str = "00:00:00.00"
         last_speed_str = "0.00x"
+        last_message_text = ""
         
         while process.returncode is None: # حلقه تا زمانی که فرآیند در حال اجراست
             try:
@@ -100,11 +101,16 @@ async def handle_video_file(client, message: Message):
 
             # اگر ۳ ثانیه از آخرین به‌روزرسانی گذشته، پیام را ویرایش کن
             if time.time() - last_update_time >= 3:
-                await processing_msg.edit_text(
+                new_message_text = (
                     f"⏳ در حال هاردساب... \n"
                     f"مدت زمان هاردساب شده: **{last_time_str}** \n"
                     f"سرعت: **{last_speed_str}**"
                 )
+                
+                if new_message_text != last_message_text:
+                    await processing_msg.edit_text(new_message_text)
+                    last_message_text = new_message_text
+                
                 last_update_time = time.time()
                 
         # منتظر ماندن تا فرآیند FFmpeg به پایان برسد
