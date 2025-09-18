@@ -40,21 +40,22 @@ async def read_ffmpeg_output(stdout_stream, progress_data):
         
         line_str = line.decode('utf-8')
         
-        # FFmpeg با پرچم -progress pipe:1 خروجی را به صورت key=value می‌دهد.
         if '=' in line_str:
             key, value = line_str.split('=', 1)
             key = key.strip()
             value = value.strip()
             
             if key == 'out_time_ms':
-                ms = int(value)
-                # تبدیل میلی‌ثانیه به فرمت 00:00:00.00
-                seconds = ms // 1000000
-                minutes = seconds // 60
-                hours = minutes // 60
-                seconds = seconds % 60
-                
-                progress_data['time'] = f"{hours:02}:{minutes % 60:02}:{seconds % 60:02}.{ms % 1000000 // 10000:02}"
+                try:
+                    ms = int(value)
+                    seconds = ms // 1000000
+                    minutes = seconds // 60
+                    hours = minutes // 60
+                    seconds = seconds % 60
+                    
+                    progress_data['time'] = f"{hours:02}:{minutes % 60:02}:{seconds % 60:02}.{ms % 1000000 // 10000:02}"
+                except ValueError:
+                    pass
             elif key == 'speed':
                 progress_data['speed'] = value
 
@@ -134,7 +135,6 @@ async def handle_video_file(client, message: Message):
         await processing_msg.delete()
 
     except Exception as e:
-        # تغییر برای نمایش خطای دقیق
         await processing_msg.edit_text(f"❌ خطایی رخ داد: {type(e).__name__}\n\nجزئیات خطا:\n`{e}`")
         print(f"An error occurred: {type(e).__name__} - {e}")
 
