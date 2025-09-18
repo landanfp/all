@@ -99,6 +99,9 @@ async def handle_video_file(client, message: Message):
         # منتظر ماندن تا فرآیند FFmpeg به پایان برسد
         await process.wait()
 
+        # اضافه کردن یک تأخیر کوتاه برای اطمینان از نهایی شدن فایل
+        await asyncio.sleep(1)
+
         # پیام "در حال آپلود..." را نمایش بده
         await processing_msg.edit_text("⬆️ در حال آپلود...")
 
