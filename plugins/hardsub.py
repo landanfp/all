@@ -95,7 +95,6 @@ async def handle_video_file(client, message: Message):
 
         await processing_msg.edit_text("⏳ در حال هاردساب... لطفاً صبر کنید.")
 
-        # دستور FFmpeg با پرچم -progress pipe:1 برای خروجی مداوم و بدون بافر
         ffmpeg_cmd = [
             'ffmpeg', '-i', video_path, '-vf', f'subtitles={srt_path}',
             '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
@@ -105,7 +104,7 @@ async def handle_video_file(client, message: Message):
         process = await asyncio.create_subprocess_exec(
             *ffmpeg_cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL # خروجی خطاها را نادیده می‌گیریم
+            stderr=subprocess.DEVNULL
         )
         
         progress_data = {'time': "00:00:00.00", 'speed': "0.00x"}
@@ -135,7 +134,9 @@ async def handle_video_file(client, message: Message):
         await processing_msg.delete()
 
     except Exception as e:
-        await processing_msg.edit_text(f"❌ خطایی رخ داد: {e}")
+        # تغییر برای نمایش خطای دقیق
+        await processing_msg.edit_text(f"❌ خطایی رخ داد: {type(e).__name__}\n\nجزئیات خطا:\n`{e}`")
+        print(f"An error occurred: {type(e).__name__} - {e}")
 
     finally:
         user_sessions.pop(user_id, None)
