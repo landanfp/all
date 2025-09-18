@@ -1,5 +1,5 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from loader import app
 import asyncio
 import time
@@ -27,17 +27,14 @@ async def progress_callback(current: int, total: int, message: Message, progress
     تابع کال‌بک برای نمایش نوار پیشرفت دانلود یا آپلود.
     """
     
-    # برای جلوگیری از ویرایش‌های زیاد و خطای MESSAGE_NOT_MODIFIED
     if time.time() - progress_data.get('last_update_time', 0) < 3:
         return
     
-    # محاسبه درصد و نوار پیشرفت
     percent = (current * 100) / total
     bar_length = 10
     filled_length = int(bar_length * percent // 100)
     bar = "█" * filled_length + "░" * (bar_length - filled_length)
     
-    # محاسبه سرعت لحظه‌ای
     time_elapsed = time.time() - progress_data.get('last_update_time', progress_data['start_time'])
     bytes_transferred_since_last_update = current - progress_data.get('last_transferred_size', 0)
     
@@ -47,7 +44,6 @@ async def progress_callback(current: int, total: int, message: Message, progress
     else:
         speed_str = "N/A"
         
-    # ساخت متن پیام
     progress_text = (
         f"**{phase}**\n"
         f"**[{percent:.1f}%]** **{bar}**\n"
@@ -58,7 +54,6 @@ async def progress_callback(current: int, total: int, message: Message, progress
     
     try:
         await message.edit_text(progress_text)
-        # به‌روزرسانی وضعیت برای محاسبه سرعت بعدی
         progress_data['last_update_time'] = time.time()
         progress_data['last_transferred_size'] = current
     except Exception:
@@ -88,30 +83,35 @@ async def expire_session(user_id):
 async def read_ffmpeg_output(stdout_stream, progress_data):
     """تسک: خروجی FFmpeg را از stdout می‌خواند و داده‌ها را ذخیره می‌کند."""
     while True:
-        line = await stdout_stream.readline()
-        if not line:
-            break
-        
-        line_str = line.decode('utf-8')
-        
-        if '=' in line_str:
-            key, value = line_str.split('=', 1)
-            key = key.strip()
-            value = value.strip()
+        try:
+            line = await stdout_stream.readline()
+            if not line:
+                break
             
-            if key == 'out_time_ms':
-                try:
-                    ms = int(value)
-                    seconds = ms // 1000000
-                    minutes = seconds // 60
-                    hours = minutes // 60
-                    seconds = seconds % 60
-                    
-                    progress_data['time'] = f"{hours:02}:{minutes % 60:02}:{seconds % 60:02}.{ms % 1000000 // 10000:02}"
-                except ValueError:
-                    pass
-            elif key == 'speed':
-                progress_data['speed'] = value
+            line_str = line.decode('utf-8')
+            
+            if '=' in line_str:
+                key, value = line_str.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                
+                if key == 'out_time_ms':
+                    try:
+                        ms = int(value)
+                        seconds = ms // 1000000
+                        minutes = seconds // 60
+                        hours = minutes // 60
+                        seconds = seconds % 60
+                        
+                        progress_data['time'] = f"{hours:02}:{minutes % 60:02}:{seconds % 60:02}.{ms % 1000000 // 10000:02}"
+                    except ValueError:
+                        pass
+                elif key == 'speed':
+                    progress_data['speed'] = value
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            break
 
 async def update_message_periodically(processing_msg, progress_data):
     """تسک: پیام را هر ۳ ثانیه با آخرین داده‌ها به‌روزرسانی می‌کند."""
@@ -125,13 +125,16 @@ async def update_message_periodically(processing_msg, progress_data):
         
         if new_message_text != last_message_text:
             try:
-                await processing_msg.edit_text(new_message_text)
+                await processing_msg.edit_text(new_message_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ لغو عملیات", callback_data="cancel_hardsub")]]))
                 last_message_text = new_message_text
             except Exception:
                 break
         
-        await asyncio.sleep(3)
-        
+        try:
+            await asyncio.sleep(3)
+        except asyncio.CancelledError:
+            break
+
 @app.on_message(filters.video & filters.private)
 async def handle_video_file(client, message: Message):
     user_id = message.from_user.id
@@ -155,7 +158,11 @@ async def handle_video_file(client, message: Message):
 
         output_path = f"hardsub_{user_id}.mp4"
 
-        await processing_msg.edit_text("⏳ در حال هاردساب... لطفاً صبر کنید.")
+        # دکمه لغو را به پیام اضافه می‌کنیم
+        await processing_msg.edit_text(
+            "⏳ در حال هاردساب... لطفاً صبر کنید.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ لغو عملیات", callback_data="cancel_hardsub")]])
+        )
 
         ffmpeg_cmd = [
             'ffmpeg', '-i', video_path, '-vf', f'subtitles={srt_path}',
@@ -169,6 +176,10 @@ async def handle_video_file(client, message: Message):
             stderr=subprocess.DEVNULL
         )
         
+        # ذخیره فرآیند در سشن کاربر برای لغو کردن
+        user_sessions[user_id]['ffmpeg_process'] = process
+        user_sessions[user_id]['ffmpeg_running'] = True
+        
         progress_data = {'time': "00:00:00.00", 'speed': "0.00x"}
         
         reader_task = asyncio.create_task(read_ffmpeg_output(process.stdout, progress_data))
@@ -176,6 +187,7 @@ async def handle_video_file(client, message: Message):
         
         await process.wait()
         
+        user_sessions[user_id]['ffmpeg_running'] = False
         reader_task.cancel()
         updater_task.cancel()
         
@@ -186,16 +198,18 @@ async def handle_video_file(client, message: Message):
             
         await asyncio.sleep(1)
         
-        upload_progress_data = {'start_time': time.time(), 'last_update_time': 0, 'last_transferred_size': 0}
-        
-        await message.reply_video(
-            video=output_path,
-            caption="✅ ویدیو با زیرنویس اضافه شده آماده است!",
-            progress=progress_callback,
-            progress_args=(processing_msg, upload_progress_data, "⬆️ در حال آپلود...")
-        )
-
-        await processing_msg.delete()
+        # اگر عملیات لغو نشده باشد، آپلود را شروع کن
+        if 'ffmpeg_process' in user_sessions[user_id] and not user_sessions[user_id]['ffmpeg_running']:
+            upload_progress_data = {'start_time': time.time(), 'last_update_time': 0, 'last_transferred_size': 0}
+            
+            await message.reply_video(
+                video=output_path,
+                caption="✅ ویدیو با زیرنویس اضافه شده آماده است!",
+                progress=progress_callback,
+                progress_args=(processing_msg, upload_progress_data, "⬆️ در حال آپلود...")
+            )
+            
+            await processing_msg.delete()
 
     except Exception as e:
         await processing_msg.edit_text(f"❌ خطایی رخ داد: {type(e).__name__}\n\nجزئیات خطا:\n`{e}`")
@@ -212,3 +226,31 @@ async def handle_video_file(client, message: Message):
                 os.remove(output_path)
         except Exception as e:
             print(f"خطا در پاکسازی فایل‌ها: {e}")
+
+@app.on_callback_query(filters.regex("cancel_hardsub"))
+async def cancel_hardsub_handler(client, callback_query):
+    user_id = callback_query.from_user.id
+    
+    # پاسخ دادن به کال‌بک (نمایش پیام موقت برای کاربر)
+    await callback_query.answer("در حال لغو عملیات...")
+    
+    # بررسی وجود فرآیند در حال اجرا
+    if user_id in user_sessions and 'ffmpeg_process' in user_sessions[user_id]:
+        process = user_sessions[user_id]['ffmpeg_process']
+        
+        try:
+            # پایان دادن به فرآیند
+            process.terminate()
+            # صبر کردن برای پایان فرآیند
+            await process.wait()
+            
+            # ارسال پیام موفقیت
+            await callback_query.message.edit_text("✅ عملیات با موفقیت لغو شد.")
+            
+        except ProcessLookupError:
+            # اگر فرآیند قبلاً متوقف شده باشد
+            await callback_query.message.edit_text("⚠️ عملیات قبلاً متوقف شده بود.")
+        except Exception as e:
+            await callback_query.message.edit_text(f"❌ خطایی در هنگام لغو رخ داد: {e}")
+    else:
+        await callback_query.message.edit_text("⚠️ هیچ عملیات فعالی برای لغو وجود ندارد.")
