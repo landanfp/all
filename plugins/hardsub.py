@@ -5,6 +5,7 @@ import asyncio
 import time
 import subprocess
 import os
+import re
 
 # ذخیره وضعیت کاربران
 user_sessions = {}
@@ -41,8 +42,8 @@ async def handle_video_file(client, message: Message):
         await message.reply_text("⚠️ ابتدا باید فایل زیرنویس (.srt) را ارسال کنید.")
         return
 
-    # اول پیام "در حال دانلود" بده
-    processing_msg = await message.reply_text("⏳ در حال دانلود فایل‌ها و پردازش... لطفاً صبر کنید.")
+    # ارسال اولین پیام وضعیت
+    processing_msg = await message.reply_text("⏳ در حال دانلود فایل‌ها...")
 
     try:
         srt_file_id = user_sessions[user_id]['srt_file_id']
@@ -53,9 +54,53 @@ async def handle_video_file(client, message: Message):
 
         output_path = f"hardsub_{user_id}.mp4"
 
-        # اجرای ffmpeg برای چسباندن زیرنویس
-        ffmpeg_cmd = f'ffmpeg -i "{video_path}" -vf subtitles="{srt_path}" -c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k "{output_path}" -y'
-        subprocess.run(ffmpeg_cmd, shell=True)
+        # به‌روزرسانی پیام برای شروع هاردساب
+        await processing_msg.edit_text("⏳ در حال هاردساب... لطفاً صبر کنید.")
+
+        # اجرای FFmpeg به صورت غیرهمزمان و خواندن خروجی آن
+        ffmpeg_cmd = [
+            'ffmpeg', '-i', video_path, '-vf', f'subtitles={srt_path}',
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
+            '-y', output_path
+        ]
+        
+        # اجرای فرآیند FFmpeg
+        process = await asyncio.create_subprocess_exec(
+            *ffmpeg_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+
+        last_update_time = time.time()
+        while True:
+            # خواندن خطوط خروجی FFmpeg
+            line = await process.stderr.readline()
+            if not line:
+                break
+            
+            line_str = line.decode('utf-8')
+            
+            # جستجو برای زمان و سرعت در خروجی FFmpeg
+            time_match = re.search(r'time=(\d{2}:\d{2}:\d{2}.\d{2})', line_str)
+            speed_match = re.search(r'speed=(\d+\.?\d*x)', line_str)
+
+            if time_match and speed_match:
+                # اگر ۳ ثانیه از آخرین به‌روزرسانی گذشته، پیام را ویرایش کن
+                if time.time() - last_update_time >= 3:
+                    current_time = time_match.group(1)
+                    speed = speed_match.group(1)
+                    await processing_msg.edit_text(
+                        f"⏳ در حال هاردساب... \n"
+                        f"مدت زمان هاردساب شده: **{current_time}** \n"
+                        f"سرعت: **{speed}**"
+                    )
+                    last_update_time = time.time()
+
+        # منتظر ماندن تا فرآیند FFmpeg به پایان برسد
+        await process.wait()
+
+        # پیام "در حال آپلود..." را نمایش بده
+        await processing_msg.edit_text("⬆️ در حال آپلود...")
 
         # ارسال ویدیو نهایی
         await message.reply_video(
@@ -63,7 +108,7 @@ async def handle_video_file(client, message: Message):
             caption="✅ ویدیو با زیرنویس اضافه شده آماده است!"
         )
 
-        # حذف پیام "در حال دانلود"
+        # حذف پیام وضعیت (اختیاری)
         await processing_msg.delete()
 
     except Exception as e:
@@ -72,7 +117,6 @@ async def handle_video_file(client, message: Message):
     finally:
         # پاکسازی فایل‌ها
         user_sessions.pop(user_id, None)
-
         try:
             if os.path.exists(video_path):
                 os.remove(video_path)
