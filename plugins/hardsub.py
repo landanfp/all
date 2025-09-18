@@ -134,10 +134,15 @@ async def update_message_periodically(processing_msg, progress_data):
             await asyncio.sleep(3)
         except asyncio.CancelledError:
             break
-
+            
 @app.on_message(filters.video & filters.private)
 async def handle_video_file(client, message: Message):
     user_id = message.from_user.id
+    
+    # اطمینان از اینکه عملیات قبلی وجود ندارد
+    if user_id in user_sessions and user_sessions[user_id].get('ffmpeg_running', False):
+        await message.reply_text("⚠️ یک عملیات در حال اجرا دارید. لطفاً صبر کنید یا آن را لغو کنید.")
+        return
 
     if user_id not in user_sessions or 'srt_file_id' not in user_sessions[user_id]:
         await message.reply_text("⚠️ ابتدا باید فایل زیرنویس (.srt) را ارسال کنید.")
@@ -158,7 +163,6 @@ async def handle_video_file(client, message: Message):
 
         output_path = f"hardsub_{user_id}.mp4"
 
-        # دکمه لغو را به پیام اضافه می‌کنیم
         await processing_msg.edit_text(
             "⏳ در حال هاردساب... لطفاً صبر کنید.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ لغو عملیات", callback_data="cancel_hardsub")]])
@@ -176,7 +180,6 @@ async def handle_video_file(client, message: Message):
             stderr=subprocess.DEVNULL
         )
         
-        # ذخیره فرآیند در سشن کاربر برای لغو کردن
         user_sessions[user_id]['ffmpeg_process'] = process
         user_sessions[user_id]['ffmpeg_running'] = True
         
@@ -187,7 +190,6 @@ async def handle_video_file(client, message: Message):
         
         await process.wait()
         
-        user_sessions[user_id]['ffmpeg_running'] = False
         reader_task.cancel()
         updater_task.cancel()
         
@@ -198,8 +200,8 @@ async def handle_video_file(client, message: Message):
             
         await asyncio.sleep(1)
         
-        # اگر عملیات لغو نشده باشد، آپلود را شروع کن
-        if 'ffmpeg_process' in user_sessions[user_id] and not user_sessions[user_id]['ffmpeg_running']:
+        # بررسی وضعیت: اگر عملیات لغو نشده باشد، آپلود را شروع کن
+        if user_id in user_sessions and user_sessions[user_id].get('ffmpeg_running', True):
             upload_progress_data = {'start_time': time.time(), 'last_update_time': 0, 'last_transferred_size': 0}
             
             await message.reply_video(
@@ -210,12 +212,17 @@ async def handle_video_file(client, message: Message):
             )
             
             await processing_msg.delete()
+        else:
+            # اگر عملیات لغو شده باشد، پیام وضعیت را پاک کن و پیام لغو موفقیت‌آمیز را نمایش بده.
+            await processing_msg.delete()
+            await message.reply_text("✅ عملیات با موفقیت لغو شد و فایل آپلود نشد.")
 
     except Exception as e:
         await processing_msg.edit_text(f"❌ خطایی رخ داد: {type(e).__name__}\n\nجزئیات خطا:\n`{e}`")
         print(f"An error occurred: {type(e).__name__} - {e}")
 
     finally:
+        # پاکسازی فایل‌ها و اطلاعات سشن
         user_sessions.pop(user_id, None)
         try:
             if os.path.exists(video_path):
@@ -234,23 +241,26 @@ async def cancel_hardsub_handler(client, callback_query):
     # پاسخ دادن به کال‌بک (نمایش پیام موقت برای کاربر)
     await callback_query.answer("در حال لغو عملیات...")
     
-    # بررسی وجود فرآیند در حال اجرا
-    if user_id in user_sessions and 'ffmpeg_process' in user_sessions[user_id]:
-        process = user_sessions[user_id]['ffmpeg_process']
-        
-        try:
-            # پایان دادن به فرآیند
-            process.terminate()
-            # صبر کردن برای پایان فرآیند
-            await process.wait()
-            
-            # ارسال پیام موفقیت
-            await callback_query.message.edit_text("✅ عملیات با موفقیت لغو شد.")
-            
-        except ProcessLookupError:
-            # اگر فرآیند قبلاً متوقف شده باشد
-            await callback_query.message.edit_text("⚠️ عملیات قبلاً متوقف شده بود.")
-        except Exception as e:
-            await callback_query.message.edit_text(f"❌ خطایی در هنگام لغو رخ داد: {e}")
+    if user_id in user_sessions:
+        if 'ffmpeg_running' in user_sessions[user_id]:
+            # تغییر وضعیت به "لغو شده"
+            user_sessions[user_id]['ffmpeg_running'] = False
+
+        if 'ffmpeg_process' in user_sessions[user_id] and user_sessions[user_id]['ffmpeg_process'].returncode is None:
+            process = user_sessions[user_id]['ffmpeg_process']
+            try:
+                # پایان دادن به فرآیند
+                process.terminate()
+                await process.wait()
+                
+                # نیازی به ویرایش پیام نیست، چون تابع اصلی پیام موفقیت‌آمیز را نمایش می‌دهد
+                # و پیام فعلی را پاک می‌کند.
+            except ProcessLookupError:
+                # اگر فرآیند قبلاً متوقف شده باشد
+                await callback_query.message.edit_text("⚠️ عملیات قبلاً متوقف شده بود.")
+            except Exception as e:
+                await callback_query.message.edit_text(f"❌ خطایی در هنگام لغو رخ داد: {e}")
+        else:
+            await callback_query.message.edit_text("⚠️ هیچ عملیات فعالی برای لغو وجود ندارد.")
     else:
         await callback_query.message.edit_text("⚠️ هیچ عملیات فعالی برای لغو وجود ندارد.")
