@@ -31,23 +31,33 @@ async def expire_session(user_id):
     if session and (time.time() - session['timestamp'] >= SESSION_TIMEOUT):
         user_sessions.pop(user_id, None)
 
-async def read_ffmpeg_output(stderr_stream, progress_data):
-    """تسک: خروجی FFmpeg را می‌خواند و داده‌ها را ذخیره می‌کند."""
+async def read_ffmpeg_output(stdout_stream, progress_data):
+    """تسک: خروجی FFmpeg را از stdout می‌خواند و داده‌ها را ذخیره می‌کند."""
     while True:
-        line = await stderr_stream.readline()
+        line = await stdout_stream.readline()
         if not line:
             break
         
         line_str = line.decode('utf-8')
         
-        # جستجو برای زمان و سرعت
-        time_match = re.search(r'time=(\d{2}:\d{2}:\d{2}.\d{2})', line_str)
-        speed_match = re.search(r'speed=(\d+\.?\d*x)', line_str)
-
-        if time_match and speed_match:
-            progress_data['time'] = time_match.group(1)
-            progress_data['speed'] = speed_match.group(1)
+        # FFmpeg با پرچم -progress pipe:1 خروجی را به صورت key=value می‌دهد.
+        if '=' in line_str:
+            key, value = line_str.split('=', 1)
+            key = key.strip()
+            value = value.strip()
             
+            if key == 'out_time_ms':
+                ms = int(value)
+                # تبدیل میلی‌ثانیه به فرمت 00:00:00.00
+                seconds = ms // 1000000
+                minutes = seconds // 60
+                hours = minutes // 60
+                seconds = seconds % 60
+                
+                progress_data['time'] = f"{hours:02}:{minutes % 60:02}:{seconds % 60:02}.{ms % 1000000 // 10000:02}"
+            elif key == 'speed':
+                progress_data['speed'] = value
+
 async def update_message_periodically(processing_msg, progress_data):
     """تسک: پیام را هر ۳ ثانیه با آخرین داده‌ها به‌روزرسانی می‌کند."""
     last_message_text = ""
@@ -63,7 +73,6 @@ async def update_message_periodically(processing_msg, progress_data):
                 await processing_msg.edit_text(new_message_text)
                 last_message_text = new_message_text
             except Exception:
-                # اگر پیام حذف شده یا خطای دیگری رخ دهد، تسک را متوقف کن.
                 break
         
         await asyncio.sleep(3)
@@ -86,30 +95,26 @@ async def handle_video_file(client, message: Message):
 
         await processing_msg.edit_text("⏳ در حال هاردساب... لطفاً صبر کنید.")
 
-        # دستور FFmpeg با اضافه شدن پرچم -stats برای نمایش مداوم وضعیت
+        # دستور FFmpeg با پرچم -progress pipe:1 برای خروجی مداوم و بدون بافر
         ffmpeg_cmd = [
             'ffmpeg', '-i', video_path, '-vf', f'subtitles={srt_path}',
             '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
-            '-y', output_path, '-stats'  # این پرچم باعث نمایش مداوم خروجی می‌شود
+            '-y', output_path, '-nostats', '-progress', 'pipe:1'
         ]
         
         process = await asyncio.create_subprocess_exec(
             *ffmpeg_cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.DEVNULL # خروجی خطاها را نادیده می‌گیریم
         )
         
-        # دیکشنری مشترک برای ذخیره اطلاعات پیشرفت
         progress_data = {'time': "00:00:00.00", 'speed': "0.00x"}
         
-        # اجرای همزمان دو تسک: خواندن خروجی و به‌روزرسانی پیام
-        reader_task = asyncio.create_task(read_ffmpeg_output(process.stderr, progress_data))
+        reader_task = asyncio.create_task(read_ffmpeg_output(process.stdout, progress_data))
         updater_task = asyncio.create_task(update_message_periodically(processing_msg, progress_data))
         
-        # منتظر ماندن تا فرآیند FFmpeg به پایان برسد
         await process.wait()
         
-        # لغو تسک‌های دیگر پس از اتمام FFmpeg
         reader_task.cancel()
         updater_task.cancel()
         
@@ -118,7 +123,6 @@ async def handle_video_file(client, message: Message):
         except asyncio.CancelledError:
             pass
             
-        # اضافه کردن یک تأخیر کوتاه برای اطمینان از نهایی شدن فایل
         await asyncio.sleep(1)
 
         await processing_msg.edit_text("⬆️ در حال آپلود...")
