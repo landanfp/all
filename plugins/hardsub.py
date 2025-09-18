@@ -6,10 +6,60 @@ import time
 import subprocess
 import os
 import re
+import math
 
 # ذخیره وضعیت کاربران
 user_sessions = {}
 SESSION_TIMEOUT = 300  # ۵ دقیقه
+
+def human_readable_size(size: int) -> str:
+    """تبدیل بایت به واحد خوانا (B, KB, MB, GB, TB)."""
+    if size == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB", "TB")
+    i = int(math.floor(math.log(size, 1024)))
+    p = math.pow(1024, i)
+    s = round(size / p, 2)
+    return f"{s} {size_name[i]}"
+
+async def progress_callback(current: int, total: int, message: Message, start_time: float, phase: str):
+    """
+    تابع کال‌بک برای نمایش نوار پیشرفت دانلود یا آپلود.
+    """
+    
+    # برای جلوگیری از ویرایش‌های زیاد و خطای MESSAGE_NOT_MODIFIED
+    if time.time() - getattr(progress_callback, 'last_update_time', 0) < 3:
+        return
+    
+    # محاسبه درصد و نوار پیشرفت
+    percent = (current * 100) / total
+    bar_length = 10
+    filled_length = int(bar_length * percent // 100)
+    bar = "█" * filled_length + "░" * (bar_length - filled_length)
+    
+    # محاسبه سرعت
+    time_elapsed = time.time() - start_time
+    if time_elapsed > 0:
+        speed = current / time_elapsed
+        speed_str = human_readable_size(speed) + "/s"
+    else:
+        speed_str = "N/A"
+        
+    # ساخت متن پیام
+    progress_text = (
+        f"**{phase}**\n"
+        f"**[{percent:.1f}%]** **{bar}**\n"
+        f"**✅ حجم انجام شده:** `{human_readable_size(current)}`\n"
+        f"**💽 حجم کل فایل:** `{human_readable_size(total)}`\n"
+        f"**🚀 سرعت:** `{speed_str}`"
+    )
+    
+    try:
+        await message.edit_text(progress_text)
+        setattr(progress_callback, 'last_update_time', time.time())
+    except Exception:
+        pass # از خطا در صورت حذف پیام جلوگیری می‌کند
+
 
 @app.on_message(filters.document & filters.private)
 async def handle_srt_file(client, message: Message):
@@ -87,11 +137,19 @@ async def handle_video_file(client, message: Message):
         return
 
     processing_msg = await message.reply_text("⏳ در حال دانلود فایل‌ها...")
+    start_time_download = time.time()
 
     try:
         srt_file_id = user_sessions[user_id]['srt_file_id']
         srt_path = await client.download_media(srt_file_id)
-        video_path = await client.download_media(message)
+        
+        # دانلود فایل ویدیو با نوار پیشرفت
+        video_path = await client.download_media(
+            message,
+            progress=progress_callback,
+            progress_args=(processing_msg, start_time_download, "⏳ در حال دانلود...")
+        )
+
         output_path = f"hardsub_{user_id}.mp4"
 
         await processing_msg.edit_text("⏳ در حال هاردساب... لطفاً صبر کنید.")
@@ -124,12 +182,15 @@ async def handle_video_file(client, message: Message):
             pass
             
         await asyncio.sleep(1)
-
-        await processing_msg.edit_text("⬆️ در حال آپلود...")
-
+        
+        start_time_upload = time.time()
+        
+        # آپلود فایل ویدیو با نوار پیشرفت
         await message.reply_video(
             video=output_path,
-            caption="✅ ویدیو با زیرنویس اضافه شده آماده است!"
+            caption="✅ ویدیو با زیرنویس اضافه شده آماده است!",
+            progress=progress_callback,
+            progress_args=(processing_msg, start_time_upload, "⬆️ در حال آپلود...")
         )
 
         await processing_msg.delete()
