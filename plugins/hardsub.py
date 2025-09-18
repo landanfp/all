@@ -86,10 +86,11 @@ async def handle_video_file(client, message: Message):
 
         await processing_msg.edit_text("⏳ در حال هاردساب... لطفاً صبر کنید.")
 
+        # دستور FFmpeg با اضافه شدن پرچم -stats برای نمایش مداوم وضعیت
         ffmpeg_cmd = [
             'ffmpeg', '-i', video_path, '-vf', f'subtitles={srt_path}',
             '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
-            '-y', output_path
+            '-y', output_path, '-stats'  # این پرچم باعث نمایش مداوم خروجی می‌شود
         ]
         
         process = await asyncio.create_subprocess_exec(
