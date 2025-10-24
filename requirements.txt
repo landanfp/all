@@ -11,4 +11,4 @@ uvicorn
 fastapi
 flask
 pydub
-
+ffmpeg-python
