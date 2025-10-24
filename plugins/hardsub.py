@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from loader import app
+# فرض بر وجود فایل loader.py و شیء app است
+from loader import app 
 import asyncio
 import time
 import subprocess
@@ -27,6 +28,7 @@ async def progress_callback(current: int, total: int, message: Message, progress
     تابع کال‌بک برای نمایش نوار پیشرفت دانلود یا آپلود.
     """
     
+    # برای جلوگیری از ویرایش بیش از حد
     if time.time() - progress_data.get('last_update_time', 0) < 3:
         return
     
@@ -68,7 +70,8 @@ async def handle_srt_file(client, message: Message):
 
         user_sessions[user_id] = {
             'srt_file_id': message.document.file_id,
-            'timestamp': now
+            'timestamp': now,
+            'ffmpeg_running': False # وضعیت اولیه: در انتظار ویدیو
         }
 
         await message.reply_text("✅ فایل زیرنویس دریافت شد. حالا لطفاً ویدیوی خود را ارسال کنید.")
@@ -77,7 +80,8 @@ async def handle_srt_file(client, message: Message):
 async def expire_session(user_id):
     await asyncio.sleep(SESSION_TIMEOUT)
     session = user_sessions.get(user_id)
-    if session and (time.time() - session['timestamp'] >= SESSION_TIMEOUT):
+    # اگر سشن وجود داشت و هنوز تبدیل به عملیات FFmpeg فعال نشده بود، آن را حذف کن.
+    if session and (time.time() - session['timestamp'] >= SESSION_TIMEOUT) and not session.get('ffmpeg_running', False):
         user_sessions.pop(user_id, None)
 
 async def read_ffmpeg_output(stdout_stream, progress_data):
@@ -117,10 +121,14 @@ async def update_message_periodically(processing_msg, progress_data):
     """تسک: پیام را هر ۳ ثانیه با آخرین داده‌ها به‌روزرسانی می‌کند."""
     last_message_text = ""
     while True:
+        # مطمئن می‌شویم که progress_data حاوی کلیدهای مورد نیاز است
+        current_time = progress_data.get('time', "00:00:00.00")
+        current_speed = progress_data.get('speed', "0.00x")
+        
         new_message_text = (
             f"⏳ در حال هاردساب... \n"
-            f"مدت زمان هاردساب شده: **{progress_data['time']}** \n"
-            f"سرعت: **{progress_data['speed']}**"
+            f"مدت زمان هاردساب شده: **{current_time}** \n"
+            f"سرعت: **{current_speed}**"
         )
         
         if new_message_text != last_message_text:
@@ -128,6 +136,7 @@ async def update_message_periodically(processing_msg, progress_data):
                 await processing_msg.edit_text(new_message_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ لغو عملیات", callback_data="cancel_hardsub")]]))
                 last_message_text = new_message_text
             except Exception:
+                # اگر پیام حذف شده یا خطایی در ویرایش رخ داد، از تسک خارج شو
                 break
         
         try:
@@ -148,10 +157,17 @@ async def handle_video_file(client, message: Message):
         await message.reply_text("⚠️ ابتدا باید فایل زیرنویس (.srt) را ارسال کنید.")
         return
 
-    processing_msg = await message.reply_text("⏳ در حال دانلود فایل‌ها...")
-    download_progress_data = {'start_time': time.time(), 'last_update_time': 0, 'last_transferred_size': 0}
+    # مسیرهای موقت فایل
+    video_path = None
+    srt_path = None
+    output_path = f"hardsub_{user_id}.mp4"
+    processing_msg = None
 
     try:
+        # 1. دانلود فایل‌ها
+        processing_msg = await message.reply_text("⏳ در حال دانلود فایل‌ها...")
+        download_progress_data = {'start_time': time.time(), 'last_update_time': 0, 'last_transferred_size': 0}
+
         srt_file_id = user_sessions[user_id]['srt_file_id']
         srt_path = await client.download_media(srt_file_id)
         
@@ -161,13 +177,12 @@ async def handle_video_file(client, message: Message):
             progress_args=(processing_msg, download_progress_data, "⏳ در حال دانلود...")
         )
 
-        output_path = f"hardsub_{user_id}.mp4"
-
         await processing_msg.edit_text(
             "⏳ در حال هاردساب... لطفاً صبر کنید.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ لغو عملیات", callback_data="cancel_hardsub")]])
         )
 
+        # 2. شروع فرآیند FFmpeg
         ffmpeg_cmd = [
             'ffmpeg', '-i', video_path, '-vf', f'subtitles={srt_path}',
             '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k',
@@ -180,16 +195,20 @@ async def handle_video_file(client, message: Message):
             stderr=subprocess.DEVNULL
         )
         
+        # ثبت وضعیت فرآیند
         user_sessions[user_id]['ffmpeg_process'] = process
-        user_sessions[user_id]['ffmpeg_running'] = True
+        user_sessions[user_id]['ffmpeg_running'] = True # شروع عملیات
+
         
         progress_data = {'time': "00:00:00.00", 'speed': "0.00x"}
         
         reader_task = asyncio.create_task(read_ffmpeg_output(process.stdout, progress_data))
         updater_task = asyncio.create_task(update_message_periodically(processing_msg, progress_data))
         
-        await process.wait()
+        # منتظر می‌مانیم تا فرآیند خاتمه یابد
+        exit_code = await process.wait()
         
+        # لغو تسک‌های مانیتورینگ
         reader_task.cancel()
         updater_task.cancel()
         
@@ -200,11 +219,27 @@ async def handle_video_file(client, message: Message):
             
         await asyncio.sleep(1)
         
-        # بررسی وضعیت: اگر عملیات لغو نشده باشد، آپلود را شروع کن
-        if user_id in user_sessions and user_sessions[user_id].get('ffmpeg_running', True):
+        # 3. بررسی وضعیت نهایی و تصمیم‌گیری برای آپلود
+        
+        # اگر کاربر دکمه لغو را فشار داده باشد، 'ffmpeg_running' باید False شده باشد
+        user_cancelled = not user_sessions.get(user_id, {}).get('ffmpeg_running', True)
+        
+        if user_cancelled:
+            # حالت ۱: لغو توسط کاربر
+            await processing_msg.delete()
+            await message.reply_text("✅ عملیات با موفقیت لغو شد و فایل آپلود نشد.")
+            
+        elif exit_code != 0:
+            # حالت ۲: شکست FFmpeg با کد خروج غیر صفر (و لغو نشده)
+            await processing_msg.edit_text(f"❌ هاردساب ناموفق بود. FFmpeg با کد خروج `{exit_code}` خاتمه یافت. لطفاً زیرنویس یا ویدیو را بررسی کنید.")
+            
+        else:
+            # حالت ۳: موفقیت (exit_code == 0 و user_cancelled == False)
             upload_progress_data = {'start_time': time.time(), 'last_update_time': 0, 'last_transferred_size': 0}
             
-            await message.reply_video(
+            # برای آپلود از پیام در حال پردازش استفاده می‌کنیم
+            await client.send_video(
+                chat_id=message.chat.id,
                 video=output_path,
                 caption="✅ ویدیو با زیرنویس اضافه شده آماده است!",
                 progress=progress_callback,
@@ -212,27 +247,24 @@ async def handle_video_file(client, message: Message):
             )
             
             await processing_msg.delete()
-        else:
-            # اگر عملیات لغو شده باشد، پیام وضعیت را پاک کن و پیام لغو موفقیت‌آمیز را نمایش بده.
-            await processing_msg.delete()
-            await message.reply_text("✅ عملیات با موفقیت لغو شد و فایل آپلود نشد.")
+
 
     except Exception as e:
-        await processing_msg.edit_text(f"❌ خطایی رخ داد: {type(e).__name__}\n\nجزئیات خطا:\n`{e}`")
+        if processing_msg:
+            await processing_msg.edit_text(f"❌ خطایی رخ داد: {type(e).__name__}\n\nجزئیات خطا:\n`{e}`")
+        else:
+            await message.reply_text(f"❌ خطایی رخ داد: {type(e).__name__}\n\nجزئیات خطا:\n`{e}`")
         print(f"An error occurred: {type(e).__name__} - {e}")
 
     finally:
         # پاکسازی فایل‌ها و اطلاعات سشن
         user_sessions.pop(user_id, None)
-        try:
-            if os.path.exists(video_path):
-                os.remove(video_path)
-            if os.path.exists(srt_path):
-                os.remove(srt_path)
-            if os.path.exists(output_path):
-                os.remove(output_path)
-        except Exception as e:
-            print(f"خطا در پاکسازی فایل‌ها: {e}")
+        for path in [video_path, srt_path, output_path]:
+            try:
+                if path and os.path.exists(path):
+                    os.remove(path)
+            except Exception as e:
+                print(f"خطا در پاکسازی فایل‌ها: {e}")
 
 @app.on_callback_query(filters.regex("cancel_hardsub"))
 async def cancel_hardsub_handler(client, callback_query):
@@ -242,9 +274,8 @@ async def cancel_hardsub_handler(client, callback_query):
     await callback_query.answer("در حال لغو عملیات...")
     
     if user_id in user_sessions:
-        if 'ffmpeg_running' in user_sessions[user_id]:
-            # تغییر وضعیت به "لغو شده"
-            user_sessions[user_id]['ffmpeg_running'] = False
+        # این مهم‌ترین خط است: وضعیت را به "لغو شده" تغییر می‌دهد
+        user_sessions[user_id]['ffmpeg_running'] = False
 
         if 'ffmpeg_process' in user_sessions[user_id] and user_sessions[user_id]['ffmpeg_process'].returncode is None:
             process = user_sessions[user_id]['ffmpeg_process']
@@ -253,10 +284,10 @@ async def cancel_hardsub_handler(client, callback_query):
                 process.terminate()
                 await process.wait()
                 
-                # نیازی به ویرایش پیام نیست، چون تابع اصلی پیام موفقیت‌آمیز را نمایش می‌دهد
-                # و پیام فعلی را پاک می‌کند.
+                # تابع اصلی (handle_video_file) پس از اتمام فرآیند، پیام موفقیت‌آمیز لغو را نمایش خواهد داد.
+                # اینجا فقط پیام فعلی را ویرایش می‌کنیم تا کاربر ببیند لغو انجام شده است.
+                await callback_query.message.edit_text("✅ درخواست لغو دریافت شد. منتظر پاکسازی...")
             except ProcessLookupError:
-                # اگر فرآیند قبلاً متوقف شده باشد
                 await callback_query.message.edit_text("⚠️ عملیات قبلاً متوقف شده بود.")
             except Exception as e:
                 await callback_query.message.edit_text(f"❌ خطایی در هنگام لغو رخ داد: {e}")
