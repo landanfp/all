@@ -7,7 +7,7 @@ from datetime import timedelta
 
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '1396293494:AAFY7RXygNEZPFPXfmoJ66SljlXeCSilXG0'
+BOT_TOKEN = '5355055672:AAEE8OIOqLYxbnwesF3ki2sOsXr03Q90JiI'
 LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
 app = Client("trim_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -41,29 +41,54 @@ async def handle_callback(_, callback_query):
 
         await callback_query.answer("در حال برش...", alert=False)
 
-        # دانلود ویدیو
-        video_msg = await app.get_messages(callback_query.message.chat.id, state["video_msg_id"])
-        temp_input = f"{user_id}_input.mp4"
-        temp_output = f"{user_id}_cut.mp4"
-        await video_msg.download(temp_input)
+        # پاک کردن پیام دکمه
+        await callback_query.message.delete()
 
-        start = state["start_time"]
-        end = state["end_time"]
+        try:
+            # دانلود ویدیو
+            video_msg = await app.get_messages(callback_query.message.chat.id, state["video_msg_id"])
+            temp_input = f"{user_id}_input.mp4"
+            temp_output = f"{user_id}_cut.mp4"
+            await video_msg.download(temp_input)
 
-        await callback_query.message.reply("در حال پردازش ویدیو...")
+            start = state["start_time"]
+            end = state["end_time"]
 
-        (
-            ffmpeg
-            .input(temp_input, ss=start, to=end)
-            .output(temp_output)
-            .run(overwrite_output=True)
-        )
+            # ارسال پیام جداگانه در حال پردازش
+            processing_msg = await app.send_message(callback_query.message.chat.id, "در حال پردازش ویدیو...")
 
-        await app.send_video(callback_query.message.chat.id, temp_output)
-        await callback_query.message.edit("تمام شد!")
-
-        os.remove(temp_input)
-        os.remove(temp_output)
+            # برش ویدیو با try-except
+            try:
+                (
+                    ffmpeg
+                    .input(temp_input, ss=start, to=end)
+                    .output(temp_output)
+                    .run(overwrite_output=True, quiet=True)  # quiet برای کمتر لاگ
+                )
+                
+                # چک کن که فایل خروجی وجود داره
+                if os.path.exists(temp_output) and os.path.getsize(temp_output) > 0:
+                    await app.send_video(callback_query.message.chat.id, temp_output)
+                    await processing_msg.edit("✅ برش ویدیو با موفقیت تمام شد!")
+                else:
+                    await processing_msg.edit("❌ خطا: فایل برش خورده تولید نشد. لطفاً دوباره امتحان کنید.")
+            except ffmpeg.Error as e:
+                print(f"FFmpeg Error: {e.stderr.decode() if e.stderr else e}")
+                await processing_msg.edit("❌ خطا در برش ویدیو: فرمت زمان اشتباه است یا ویدیو پشتیبانی نمی‌شود. لطفاً تایم‌ها را چک کنید (hh:mm:ss).")
+            except Exception as e:
+                print(f"Unexpected Error in trimming: {e}")
+                await processing_msg.edit("❌ خطای غیرمنتظره در پردازش ویدیو.")
+            
+            # پاک کردن فایل‌ها
+            if os.path.exists(temp_input):
+                os.remove(temp_input)
+            if os.path.exists(temp_output):
+                os.remove(temp_output)
+            
+        except Exception as e:
+            print(f"Download or other Error: {e}")
+            await app.send_message(callback_query.message.chat.id, "❌ خطا در دانلود ویدیو.")
+        
         del user_state[user_id]
 
 @app.on_message(filters.video)
