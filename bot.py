@@ -39,7 +39,7 @@ async def handle_callback(_, callback_query):
         if not state:
             return
 
-        await callback_query.answer("در حال برش...")
+        await callback_query.answer("در حال برش...", alert=False)
 
         # دانلود ویدیو
         video_msg = await app.get_messages(callback_query.message.chat.id, state["video_msg_id"])
@@ -121,6 +121,9 @@ async def handle_time(_, message):
         end_prompt_msg = await message.reply("حالا تایم پایان را وارد کنید (hh:mm:ss)")
         user_state[user_id]["end_prompt_id"] = end_prompt_msg.id
 
+        # پیام تأییدی با answer
+        await message.answer("✅ با موفقیت اضافه شد.")
+
     elif state["step"] == "awaiting_end":
         user_state[user_id]["end_time"] = message.text
         state["step"] = "ready"
@@ -138,5 +141,8 @@ async def handle_time(_, message):
         # حذف پیام کاربر و پیام پرامپت پایان
         await message.delete()
         await app.delete_messages(message.chat.id, state["end_prompt_id"])
+
+        # پیام تأییدی با answer
+        await message.answer("✅ با موفقیت اضافه شد.")
 
 app.run()
