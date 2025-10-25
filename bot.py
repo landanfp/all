@@ -33,6 +33,9 @@ def parse_time_to_seconds(time_str):
     except (ValueError, IndexError):
         raise ValueError(f"فرمت زمان اشتباه: '{time_str}'. لطفاً از hh:mm:ss (مثل 00:01:23) یا mm:ss استفاده کنید.")
 
+def download_progress(current, total):
+    print(f"Download progress: {current} / {total} bytes ({(current / total * 100):.1f}%)")
+
 @app.on_message(filters.command("start"))
 async def start(_, message):
     keyboard = InlineKeyboardMarkup(
@@ -61,21 +64,26 @@ async def handle_callback(_, callback_query):
         await callback_query.message.delete()
 
         chat_id = callback_query.message.chat.id
-        temp_input = f"{user_id}_input.mp4"
-        temp_output = f"{user_id}_cut.mp4"
+        temp_input = f"/tmp/{user_id}_input.mp4"  # تغییر به /tmp برای writable
+        temp_output = f"/tmp/{user_id}_cut.mp4"
 
         try:
-            # دانلود ویدیو با try-except خاص
+            # دانلود ویدیو با progress callback
             print(f"Starting download for user {user_id}...")
             video_msg = await app.get_messages(chat_id, state["video_msg_id"])
-            await video_msg.download(temp_input)
+            await video_msg.download(
+                file_name=temp_input,
+                progress=download_progress,
+                progress_args=(user_id,)
+            )
             
-            # چک فایل دانلود شده
+            # چک دقیق فایل دانلود شده
             if not os.path.exists(temp_input):
-                raise Exception("Downloaded file does not exist")
-            if os.path.getsize(temp_input) == 0:
-                raise Exception("Downloaded file is empty")
-            print(f"Download successful: {temp_input} (size: {os.path.getsize(temp_input)} bytes)")
+                raise Exception("Downloaded file does not exist in /tmp")
+            file_size = os.path.getsize(temp_input)
+            if file_size == 0:
+                raise Exception("Downloaded file is empty (0 bytes)")
+            print(f"Download successful: {temp_input} (size: {file_size} bytes)")
 
             start_sec = state["start_sec"]
             end_sec = state["end_sec"]
@@ -115,7 +123,7 @@ async def handle_callback(_, callback_query):
             
         except Exception as e:
             print(f"Download Error: {e}")
-            await app.send_message(chat_id, f"❌ خطا در دانلود ویدیو: {str(e)}\nلطفاً ویدیو را دوباره ارسال کنید.")
+            await app.send_message(chat_id, f"❌ خطا در دانلود ویدیو: {str(e)}\nلطفاً ویدیو را دوباره ارسال کنید (ویدیو کوچک‌تر امتحان کنید).")
         
         del user_state[user_id]
 
