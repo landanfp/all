@@ -82,16 +82,17 @@ async def handle_video(_, message):
     )
     sent_msg = await message.reply(text)
 
+    start_prompt_msg = await message.reply("لطفاً تایم شروع را ارسال کنید (hh:mm:ss)")
+
     user_state[user_id].update({
         "step": "awaiting_start",
         "video_msg_id": message.id,
         "video_edit_msg": sent_msg.id,
         "duration": duration,
         "start_time": None,
-        "end_time": None
+        "end_time": None,
+        "start_prompt_id": start_prompt_msg.id
     })
-
-    await message.reply("لطفاً تایم شروع را ارسال کنید (hh:mm:ss)")
 
 @app.on_message(filters.text)
 async def handle_time(_, message):
@@ -112,7 +113,13 @@ async def handle_time(_, message):
             f"⏳ تایم پایان: {{}}"
         )
         await video_msg.edit(new_text)
-        await message.reply("حالا تایم پایان را وارد کنید (hh:mm:ss)")
+
+        # حذف پیام کاربر و پیام پرامپت شروع
+        await message.delete()
+        await app.delete_messages(message.chat.id, state["start_prompt_id"])
+
+        end_prompt_msg = await message.reply("حالا تایم پایان را وارد کنید (hh:mm:ss)")
+        user_state[user_id]["end_prompt_id"] = end_prompt_msg.id
 
     elif state["step"] == "awaiting_end":
         user_state[user_id]["end_time"] = message.text
@@ -127,5 +134,9 @@ async def handle_time(_, message):
         await video_msg.edit(new_text, reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton("شروع برش", callback_data="cut_now")]]
         ))
+
+        # حذف پیام کاربر و پیام پرامپت پایان
+        await message.delete()
+        await app.delete_messages(message.chat.id, state["end_prompt_id"])
 
 app.run()
