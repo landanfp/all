@@ -17,6 +17,22 @@ user_state = {}
 def seconds_to_hms(seconds):
     return str(timedelta(seconds=seconds))
 
+def parse_time_to_seconds(time_str):
+    try:
+        parts = [int(p) for p in time_str.strip().split(':')]
+        if len(parts) == 3:
+            h, m, s = parts
+            return h * 3600 + m * 60 + s
+        elif len(parts) == 2:
+            m, s = parts
+            return m * 60 + s
+        elif len(parts) == 1:
+            return int(parts[0])
+        else:
+            raise ValueError("Invalid format")
+    except (ValueError, IndexError):
+        raise ValueError(f"فرمت زمان اشتباه: '{time_str}'. لطفاً از hh:mm:ss (مثل 00:01:23) یا mm:ss استفاده کنید.")
+
 @app.on_message(filters.command("start"))
 async def start(_, message):
     keyboard = InlineKeyboardMarkup(
@@ -39,7 +55,6 @@ async def handle_callback(_, callback_query):
         if not state:
             return
 
-        # فیکس: تغییر alert به show_alert
         await callback_query.answer("در حال برش...", show_alert=False)
 
         # پاک کردن پیام دکمه
@@ -52,8 +67,8 @@ async def handle_callback(_, callback_query):
             temp_output = f"{user_id}_cut.mp4"
             await video_msg.download(temp_input)
 
-            start = state["start_time"]
-            end = state["end_time"]
+            start_sec = state["start_sec"]
+            end_sec = state["end_sec"]
 
             # ارسال پیام جداگانه در حال پردازش
             processing_msg = await app.send_message(callback_query.message.chat.id, "در حال پردازش ویدیو...")
@@ -62,9 +77,9 @@ async def handle_callback(_, callback_query):
             try:
                 (
                     ffmpeg
-                    .input(temp_input, ss=start, to=end)
+                    .input(temp_input, ss=start_sec, to=end_sec)
                     .output(temp_output)
-                    .run(overwrite_output=True, quiet=True)  # quiet برای کمتر لاگ
+                    .run(overwrite_output=True, quiet=True)
                 )
                 
                 # چک کن که فایل خروجی وجود داره
@@ -74,8 +89,9 @@ async def handle_callback(_, callback_query):
                 else:
                     await processing_msg.edit("❌ خطا: فایل برش خورده تولید نشد. لطفاً دوباره امتحان کنید.")
             except ffmpeg.Error as e:
-                print(f"FFmpeg Error: {e.stderr.decode() if e.stderr else e}")
-                await processing_msg.edit("❌ خطا در برش ویدیو: فرمت زمان اشتباه است یا ویدیو پشتیبانی نمی‌شود. لطفاً تایم‌ها را چک کنید (hh:mm:ss).")
+                error_msg = e.stderr.decode('utf-8') if e.stderr else str(e)
+                print(f"FFmpeg Error: {error_msg}")
+                await processing_msg.edit(f"❌ خطا در برش ویدیو: {error_msg}\nلطفاً تایم‌ها را چک کنید.")
             except Exception as e:
                 print(f"Unexpected Error in trimming: {e}")
                 await processing_msg.edit("❌ خطای غیرمنتظره در پردازش ویدیو.")
@@ -99,10 +115,11 @@ async def handle_video(_, message):
     if user_id not in user_state or user_state[user_id].get("step") != "awaiting_video":
         return
 
-    duration = seconds_to_hms(message.video.duration)
+    duration_sec = message.video.duration
+    duration_hms = seconds_to_hms(duration_sec)
 
     text = (
-        f"⏱ زمان ویدیو: {duration}\n"
+        f"⏱ زمان ویدیو: {duration_hms}\n"
         f"⏳ تایم شروع: {{}}\n"
         f"⏳ تایم پایان: {{}}"
     )
@@ -114,7 +131,8 @@ async def handle_video(_, message):
         "step": "awaiting_start",
         "video_msg_id": message.id,
         "video_edit_msg": sent_msg.id,
-        "duration": duration,
+        "duration_sec": duration_sec,
+        "duration_hms": duration_hms,
         "start_time": None,
         "end_time": None,
         "start_prompt_id": start_prompt_msg.id
@@ -129,40 +147,60 @@ async def handle_time(_, message):
         return
 
     if state["step"] == "awaiting_start":
-        user_state[user_id]["start_time"] = message.text
-        state["step"] = "awaiting_end"
+        try:
+            start_sec = parse_time_to_seconds(message.text)
+            if start_sec > state["duration_sec"]:
+                await message.reply("❌ تایم شروع نمی‌تواند بیشتر از طول ویدیو باشد!")
+                return
+            user_state[user_id]["start_sec"] = start_sec
+            user_state[user_id]["start_time"] = message.text
+            state["step"] = "awaiting_end"
 
-        video_msg = await app.get_messages(message.chat.id, state["video_edit_msg"])
-        new_text = (
-            f"⏱ زمان ویدیو: {state['duration']}\n"
-            f"⏳ تایم شروع: {state['start_time']}\n"
-            f"⏳ تایم پایان: {{}}"
-        )
-        await video_msg.edit(new_text)
+            video_msg = await app.get_messages(message.chat.id, state["video_edit_msg"])
+            new_text = (
+                f"⏱ زمان ویدیو: {state['duration_hms']}\n"
+                f"⏳ تایم شروع: {state['start_time']}\n"
+                f"⏳ تایم پایان: {{}}"
+            )
+            await video_msg.edit(new_text)
 
-        # حذف پیام کاربر و پیام پرامپت شروع
-        await message.delete()
-        await app.delete_messages(message.chat.id, state["start_prompt_id"])
+            # حذف پیام کاربر و پیام پرامپت شروع
+            await message.delete()
+            await app.delete_messages(message.chat.id, state["start_prompt_id"])
 
-        end_prompt_msg = await message.reply("حالا تایم پایان را وارد کنید (hh:mm:ss)")
-        user_state[user_id]["end_prompt_id"] = end_prompt_msg.id
+            end_prompt_msg = await message.reply("حالا تایم پایان را وارد کنید (hh:mm:ss)")
+            user_state[user_id]["end_prompt_id"] = end_prompt_msg.id
+        except ValueError as e:
+            await message.reply(str(e))
 
     elif state["step"] == "awaiting_end":
-        user_state[user_id]["end_time"] = message.text
-        state["step"] = "ready"
+        try:
+            end_sec = parse_time_to_seconds(message.text)
+            start_sec = state["start_sec"]
+            if end_sec <= start_sec:
+                await message.reply("❌ تایم پایان باید بیشتر از تایم شروع باشد!")
+                return
+            if end_sec > state["duration_sec"]:
+                await message.reply("❌ تایم پایان نمی‌تواند بیشتر از طول ویدیو باشد!")
+                return
+            user_state[user_id]["end_sec"] = end_sec
+            user_state[user_id]["end_time"] = message.text
+            state["step"] = "ready"
 
-        video_msg = await app.get_messages(message.chat.id, state["video_edit_msg"])
-        new_text = (
-            f"⏱ زمان ویدیو: {state['duration']}\n"
-            f"⏳ تایم شروع: {state['start_time']}\n"
-            f"⏳ تایم پایان: {state['end_time']}"
-        )
-        await video_msg.edit(new_text, reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("شروع برش", callback_data="cut_now")]]
-        ))
+            video_msg = await app.get_messages(message.chat.id, state["video_edit_msg"])
+            new_text = (
+                f"⏱ زمان ویدیو: {state['duration_hms']}\n"
+                f"⏳ تایم شروع: {state['start_time']}\n"
+                f"⏳ تایم پایان: {state['end_time']}"
+            )
+            await video_msg.edit(new_text, reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("شروع برش", callback_data="cut_now")]]
+            ))
 
-        # حذف پیام کاربر و پیام پرامپت پایان
-        await message.delete()
-        await app.delete_messages(message.chat.id, state["end_prompt_id"])
+            # حذف پیام کاربر و پیام پرامپت پایان
+            await message.delete()
+            await app.delete_messages(message.chat.id, state["end_prompt_id"])
+        except ValueError as e:
+            await message.reply(str(e))
 
 app.run()
