@@ -105,7 +105,7 @@ async def handle_time(_, message):
         user_state[user_id]["start_time"] = message.text
         state["step"] = "awaiting_end"
 
-        video_msg = await message.chat.get_message(state["video_edit_msg"])
+        video_msg = await app.get_messages(message.chat.id, state["video_edit_msg"])
         new_text = (
             f"⏱ زمان ویدیو: {state['duration']}\n"
             f"⏳ تایم شروع: {state['start_time']}\n"
@@ -118,7 +118,7 @@ async def handle_time(_, message):
         user_state[user_id]["end_time"] = message.text
         state["step"] = "ready"
 
-        video_msg = await message.chat.get_message(state["video_edit_msg"])
+        video_msg = await app.get_messages(message.chat.id, state["video_edit_msg"])
         new_text = (
             f"⏱ زمان ویدیو: {state['duration']}\n"
             f"⏳ تایم شروع: {state['start_time']}\n"
