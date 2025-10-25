@@ -39,7 +39,8 @@ async def handle_callback(_, callback_query):
         if not state:
             return
 
-        await callback_query.answer("در حال برش...", alert=False)
+        # فیکس: تغییر alert به show_alert
+        await callback_query.answer("در حال برش...", show_alert=False)
 
         # پاک کردن پیام دکمه
         await callback_query.message.delete()
