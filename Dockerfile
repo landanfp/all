@@ -1,6 +1,6 @@
 FROM python:3.9-slim
 
-# نصب ابزار ffmpeg
+# نصب ابزار ffmpeg (کتابخانه مورد نیاز ffmpeg-python)
 # این خود برنامه ffmpeg هست که کتابخونه پایتون ازش استفاده می‌کنه
 RUN apt-get update && apt-get install -y \
     ffmpeg \
@@ -18,5 +18,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # کپی کردن بقیه پروژه
 COPY . /app
 
-# اجرای برنامه اصلی
+# دستور اجرای برنامه اصلی
 CMD ["python", "bot.py"]
