@@ -8,6 +8,11 @@ from datetime import timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 
+# <<< واردات جدید برای برش صدا >>>
+# دو تابع اصلی را از فایل audio_trimmer.py ایمپورت می‌کنیم.
+from audio_trimmer import handle_audio_file, cut_audio_action 
+
+
 # --- تنظیمات (Configuration) ---
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
@@ -23,7 +28,8 @@ def seconds_to_hms(seconds):
     return str(timedelta(seconds=seconds))
 
 # ===============================================
-# --- بخش جدید: سرور Health Check ---
+# --- بخش Health Check ---
+# (بدون تغییر)
 # ===============================================
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -52,32 +58,48 @@ def run_health_server():
 @app.on_message(filters.command("start"))
 async def start(_, message):
     """پاسخ به دستور /start و نمایش دکمه شروع."""
+    # <<< دکمه برش صدا اضافه شد >>>
     keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("✂️ شروع برش", callback_data="start_cutting")]]
+        [
+            [InlineKeyboardButton("✂️ شروع برش ویدیو", callback_data="start_cutting")],
+            [InlineKeyboardButton("🎧 شروع برش صدا", callback_data="start_audio_cutting")] # دکمه جدید
+        ]
     )
-    await message.reply("سلام! برای برش ویدیو روی دکمه زیر کلیک کن:", reply_markup=keyboard)
+    await message.reply("سلام! برای برش ویدیو یا صدا روی دکمه موردنظر کلیک کن:", reply_markup=keyboard)
 
 @app.on_callback_query()
-async def handle_callback(_, callback_query):
+async def handle_callback(client, callback_query):
     """مدیریت دکمه‌های شیشه‌ای."""
     user_id = callback_query.from_user.id
     chat_id = callback_query.message.chat.id
 
     if callback_query.data == "start_cutting":
         user_state[user_id] = {
-            "step": "awaiting_video"
+            "step": "awaiting_video",
+            "media_type": "video" # اضافه کردن نوع مدیا
         }
         prompt_msg = await callback_query.message.reply("لطفاً ویدیوی موردنظر را ارسال کنید.")
         user_state[user_id]["prompt_msg_id"] = prompt_msg.id
         await callback_query.answer()
+    
+    # <<< مدیریت دکمه جدید برش صدا >>>
+    elif callback_query.data == "start_audio_cutting":
+        user_state[user_id] = {
+            "step": "awaiting_audio", # تغییر استپ برای فایل صوتی
+            "media_type": "audio" # اضافه کردن نوع مدیا
+        }
+        prompt_msg = await callback_query.message.reply("لطفاً فایل صوتی (MP3) موردنظر را ارسال کنید.")
+        user_state[user_id]["prompt_msg_id"] = prompt_msg.id
+        await callback_query.answer()
 
+    # <<< مدیریت برش ویدیو (قبلی) >>>
     elif callback_query.data == "cut_now":
         state = user_state.get(user_id)
-        if not state:
+        if not state or state.get("media_type") != "video": # چک کردن نوع مدیا
             await callback_query.answer("فرآیند برش منقضی شده است. دوباره شروع کنید.", show_alert=True)
             return
 
-        await callback_query.answer("در حال برش...")
+        await callback_query.answer("در حال برش ویدیو...")
         
         try:
             await callback_query.message.edit_reply_markup(reply_markup=None)
@@ -104,11 +126,9 @@ async def handle_callback(_, callback_query):
             await processing_msg.edit_text("⚡️ در حال برش سریع (کپی جریان)...")
 
             # --- برش با FFmpeg: استفاده از Stream Copy (فوق سریع) ---
-            # قرار دادن ss قبل از input برای جستجوی سریع (Fast Seek)
             (
                 ffmpeg
                 .input(downloaded_file_path, ss=start) 
-                # استفاده از c="copy" برای کپی بدون رمزگذاری مجدد
                 .output(temp_output, to=end, c="copy", loglevel="error")
                 .run(overwrite_output=True)
             )
@@ -119,7 +139,6 @@ async def handle_callback(_, callback_query):
             await processing_msg.edit_text("✅ تمام شد! ویدیوی برش‌خورده ارسال شد.")
 
         except ffmpeg.Error as e:
-            # اگر خطای FFmpeg دوباره رخ دهد، به کاربر می‌گوییم که به دلیل برش در Keyframe نیست.
             error_details = e.stderr.decode('utf8', errors='ignore') if e.stderr else "جزئیات خطا نامشخص است."
             await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`\n\n**توجه:** این خطا ممکن است به دلیل عدم امکان برش دقیق در نقطه زمانی درخواستی (Keyframe) رخ داده باشد. اگر ادامه داشت، باید از روش کندتر استفاده کرد.")
         except Exception as e:
@@ -133,13 +152,19 @@ async def handle_callback(_, callback_query):
             
             if user_id in user_state:
                 del user_state[user_id]
+    
+    # <<< مدیریت برش صدا (جدید - از فایل جداگانه فراخوانی می‌شود) >>>
+    elif callback_query.data == "cut_audio_now":
+        # فراخوانی تابع برش صدا از فایل جداگانه
+        await cut_audio_action(client, callback_query)
 
 
 @app.on_message(filters.video)
 async def handle_video(_, message):
     """دریافت ویدیو و ذخیره وضعیت."""
     user_id = message.from_user.id
-
+    
+    # <<< اطمینان از اینکه کاربر در حالت انتظار ویدیو است >>>
     if user_id not in user_state or user_state[user_id].get("step") != "awaiting_video":
         return
 
@@ -157,11 +182,12 @@ async def handle_video(_, message):
         f"⏳ تایم پایان: ..."
     )
     sent_msg = await message.reply(text)
-
+    
+    # <<< استفاده از media_edit_msg برای هماهنگی با handle_time >>>
     user_state[user_id].update({
         "step": "awaiting_start",
         "video_msg_id": message.id,
-        "video_edit_msg": sent_msg.id, 
+        "media_edit_msg": sent_msg.id, # تغییر نام برای هماهنگی با handle_time
         "duration": duration,
         "start_time": None,
         "end_time": None
@@ -170,6 +196,11 @@ async def handle_video(_, message):
     prompt_msg = await message.reply("لطفاً تایم شروع را ارسال کنید (hh:mm:ss)")
     user_state[user_id]["prompt_msg_id"] = prompt_msg.id
 
+# <<< اضافه کردن هندلر فایل صوتی از فایل جداگانه >>>
+# این خط، تابع handle_audio_file از audio_trimmer.py را برای فیلتر filters.audio فعال می‌کند.
+app.add_handler(handle_audio_file)
+
+
 @app.on_message(filters.text)
 async def handle_time(_, message):
     """دریافت زمان شروع و پایان و به‌روزرسانی پیام اصلی."""
@@ -177,11 +208,12 @@ async def handle_time(_, message):
     chat_id = message.chat.id
     state = user_state.get(user_id)
 
-    if not state:
+    if not state or state.get("step") not in ["awaiting_start", "awaiting_end"]:
         return
 
+    # <<< استفاده از media_edit_msg به جای video_edit_msg >>>
     try:
-        video_msg = await app.get_messages(chat_id, state["video_edit_msg"])
+        video_msg = await app.get_messages(chat_id, state["media_edit_msg"])
     except Exception:
         return
 
@@ -193,13 +225,18 @@ async def handle_time(_, message):
             await app.delete_messages(chat_id, [user_message_id, prompt_message_id])
         except Exception:
             pass
-
+    
+    # تعیین نوع مدیا برای پیام‌ها و دکمه نهایی
+    media_type = state.get("media_type", "video") # پیش‌فرض ویدیو
+    media_label = "ویدیو" if media_type == "video" else "فایل صوتی"
+    callback_data = "cut_now" if media_type == "video" else "cut_audio_now"
+    
     if state["step"] == "awaiting_start":
         user_state[user_id]["start_time"] = message.text
         state["step"] = "awaiting_end"
 
         new_text = (
-            f"⏱ زمان ویدیو: {state['duration']}\n"
+            f"⏱ زمان {media_label}: {state['duration']}\n"
             f"⏳ تایم شروع: {state['start_time']}\n"
             f"⏳ تایم پایان: ..."
         )
@@ -213,12 +250,13 @@ async def handle_time(_, message):
         state["step"] = "ready"
 
         new_text = (
-            f"⏱ زمان ویدیو: {state['duration']}\n"
+            f"⏱ زمان {media_label}: {state['duration']}\n"
             f"⏳ تایم شروع: {state['start_time']}\n"
             f"⏳ تایم پایان: {state['end_time']}"
         )
+        # <<< استفاده از callback_data صحیح >>>
         await video_msg.edit_text(new_text, reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("شروع برش", callback_data="cut_now")]]
+            [[InlineKeyboardButton("شروع برش", callback_data=callback_data)]]
         ))
 
 # ===============================================
