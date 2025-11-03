@@ -75,10 +75,12 @@ async def cut_audio_action(client: Client, callback_query):
     except Exception:
         pass
 
-    # فایل ورودی، پسوند خود را از Pyrogram می‌گیرد
+    # نام فایل ورودی، پسوند خود را از Pyrogram می‌گیرد
     expected_input_filename = f"{user_id}_input_audio" 
-    # خروجی M4A (AAC) برای سازگاری بهتر با Stream Copy و تلگرام
-    temp_output = f"{user_id}_cut_audio.m4a"
+    # نام فایل‌های خروجی موقت
+    output_filename_mp3 = f"{user_id}_cut_audio_re.mp3"
+    output_filename_m4a = f"{user_id}_cut_audio.m4a"
+    final_output_filename = None
     downloaded_file_path = None
 
     try:
@@ -93,39 +95,65 @@ async def cut_audio_action(client: Client, callback_query):
 
         start = state["start_time"]
         end = state["end_time"]
-
-        # <<< لاگ عیب‌یابی در کنسول >>>
-        print(f"DEBUG: Trimming audio file: {downloaded_file_path} from {start} to {end}")
         
-        await processing_msg.edit_text("⚡️ در حال برش سریع (کپی جریان)...")
+        # <<< کد جدید: تعیین نوع فایل و حالت برش >>>
+        _, file_extension = os.path.splitext(downloaded_file_path)
+        is_mp3 = file_extension.lower() == '.mp3'
+        
+        if is_mp3:
+            # حالت MP3: رمزگذاری مجدد (Re-encode)
+            codec = "libmp3lame"
+            cut_mode = "رمزگذاری مجدد MP3 (کندتر اما دقیق)"
+            final_output_filename = output_filename_mp3
+        else:
+            # حالت M4A و بقیه: کپی سریع (Copy Stream)
+            codec = "copy"
+            cut_mode = "کپی سریع جریان (فوق سریع)"
+            final_output_filename = output_filename_m4a
 
-        # --- برش با FFmpeg: استفاده از Stream Copy ---
-        # اضافه کردن map="0:a:0" برای اطمینان از انتخاب جریان صوتی اول.
-        # loglevel="info" برای گرفتن جزئیات بیشتر خطا.
-        (
-            ffmpeg
-            .input(downloaded_file_path, ss=start) 
-            .output(temp_output, to=end, c="copy", map="0:a:0", loglevel="info") 
-            .run(overwrite_output=True)
-        )
+        print(f"DEBUG: Trimming audio file: {downloaded_file_path} from {start} to {end} using {cut_mode}.")
+        
+        await processing_msg.edit_text(f"⚡️ در حال برش: {cut_mode}...")
 
+        # --- اجرای FFmpeg ---
+        if codec == "copy":
+            # برش M4A با کپی مستقیم
+            (
+                ffmpeg
+                .input(downloaded_file_path, ss=start) 
+                .output(final_output_filename, to=end, c=codec, map="0:a:0", loglevel="info") 
+                .run(overwrite_output=True)
+            )
+        else:
+            # برش MP3 با رمزگذاری مجدد
+            (
+                ffmpeg
+                .input(downloaded_file_path, ss=start) 
+                .output(final_output_filename, to=end, acodec=codec, audio_bitrate="192k", loglevel="info") 
+                .run(overwrite_output=True)
+            )
+            
         # --- آپلود و ارسال نتیجه ---
         await processing_msg.edit_text("📤 در حال ارسال فایل صوتی برش‌خورده...")
-        await app.send_audio(chat_id, temp_output)
+        await app.send_audio(chat_id, final_output_filename) # استفاده از نام فایل خروجی صحیح
         await processing_msg.edit_text("✅ تمام شد! فایل صوتی برش‌خورده ارسال شد.")
 
     except ffmpeg.Error as e:
-        # <<< بهبود لاگ خطا >>>
-        error_details = e.stderr.decode('utf8', errors='ignore') if e.stderr else "جزئیات خطا نامشخص است (FFmpeg خروجی خطا نداد). احتمالاً مشکل در مسیر فایل یا پارامترهای زمان است."
-        await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`\n\n**توجه:** این خطا ممکن است به دلیل عدم امکان برش دقیق در نقطه زمانی درخواستی رخ داده باشد.")
+        # بهبود لاگ خطا
+        error_details = e.stderr.decode('utf8', errors='ignore') if e.stderr else "جزئیات خطا نامشخص است (FFmpeg خروجی خطا نداد). احتمالاً مشکل در پارامترهای زمان یا فایل ورودی آسیب دیده است."
+        await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`\n\n**توجه:** اگر فایل MP3 بود، به دلیل رمزگذاری مجدد نباید خطا می‌داد.")
     except Exception as e:
         await app.send_message(chat_id, f"❌ یک خطای غیرمنتظره رخ داد: دانلود یا پردازش با مشکل مواجه شد. `{e}`")
     finally:
         # --- پاکسازی فایل‌ها و وضعیت ---
         if downloaded_file_path and os.path.exists(downloaded_file_path):
             os.remove(downloaded_file_path)
-        if os.path.exists(temp_output):
-            os.remove(temp_output)
         
+        # پاکسازی هر دو فایل خروجی موقت احتمالی
+        if os.path.exists(output_filename_m4a):
+            os.remove(output_filename_m4a)
+        if os.path.exists(output_filename_mp3):
+            os.remove(output_filename_mp3)
+
         if user_id in user_state:
             del user_state[user_id]
