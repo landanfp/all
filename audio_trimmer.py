@@ -1,6 +1,6 @@
 import os
 import ffmpeg
-import asyncio 
+import asyncio # نیاز است!
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from pyrogram.errors import MessageNotModified
@@ -24,7 +24,7 @@ async def handle_audio_file(client: Client, message: Message):
         try:
             await client.delete_messages(message.chat.id, user_state[user_id]["prompt_msg_id"])
         except RPCError:
-             pass
+            pass
 
     # بررسی نوع فایل (اطمینان از فایل صوتی)
     if not message.audio:
@@ -33,6 +33,7 @@ async def handle_audio_file(client: Client, message: Message):
             del user_state[user_id]
         return
 
+    # این بخش مدت زمان کلی فایل را نمایش می‌دهد و درست است
     duration = seconds_to_hms(message.audio.duration)
 
     text = (
@@ -56,10 +57,6 @@ async def handle_audio_file(client: Client, message: Message):
     prompt_msg = await message.reply("لطفاً تایم شروع را ارسال کنید (hh:mm:ss)")
     user_state[user_id]["prompt_msg_id"] = prompt_msg.id
 
-
-# audio_trimmer.py
-
-# ... (ایمپورت‌های بالای فایل، شامل 'import asyncio' باید باشد) ...
 
 async def cut_audio_action(client: Client, callback_query):
     """منطق برش فایل صوتی."""
@@ -99,28 +96,28 @@ async def cut_audio_action(client: Client, callback_query):
         start = state["start_time"]
         end = state["end_time"]
         
-        # ================================================================
-        # <<< ===== این بخش کلیدی و اصلاح شده است ===== >>>
-        # به جای بررسی پسوند فایل، نوع MIME پیام را بررسی می‌کنیم
-        
-        mime_type = audio_msg.audio.mime_type.lower() if audio_msg.audio.mime_type else ""
-        print(f"DEBUG: Detected MIME type: {mime_type}")
+        # --- محاسبه Duration برای برش دقیق ---
+        start_seconds = sum(x * int(t) for x, t in zip([3600, 60, 1], start.split(':')))
+        end_seconds = sum(x * int(t) for x, t in zip([3600, 60, 1], end.split(':')))
 
-        # 'audio/mpeg' یا 'audio/mp3' هر دو به معنی MP3 هستند
+        duration_seconds = end_seconds - start_seconds
+        duration_hms = seconds_to_hms(duration_seconds)
+        # ------------------------------------
+        
+        # --- تشخیص نوع فایل بر اساس MIME Type تلگرام ---
+        mime_type = audio_msg.audio.mime_type.lower() if audio_msg.audio and audio_msg.audio.mime_type else ""
         is_mp3 = 'mpeg' in mime_type or 'mp3' in mime_type
-        # ================================================================
         
         if is_mp3:
             codec = "libmp3lame"
-            cut_mode = "رمزگذاری مجدد MP3 (کندتر اما دقیق)"
+            cut_mode = "رمزگذاری مجدد MP3 (کندتر و دقیق‌تر)"
             final_output_filename = output_filename_mp3
         else:
-            # فرض می‌کنیم M4A یا فرمت دیگری است که کپی سریع را می‌پذیرد
             codec = "copy"
             cut_mode = "کپی سریع جریان (M4A/AAC)"
             final_output_filename = output_filename_m4a
 
-        print(f"DEBUG: Trimming audio file: {downloaded_file_path} from {start} to {end} using {cut_mode}.")
+        print(f"DEBUG: Trimming audio file: {downloaded_file_path} from {start} for duration {duration_hms} using {cut_mode}.")
         
         await processing_msg.edit_text(f"⚡️ در حال برش: {cut_mode}...")
 
@@ -131,20 +128,19 @@ async def cut_audio_action(client: Client, callback_query):
             ffmpeg_process = (
                 ffmpeg
                 .input(downloaded_file_path, ss=start) 
-                # f="ipod" فرمت کانتینر M4A را اجبار می‌کند
-                .output(final_output_filename, to=end, c=codec, map="0:a:0", f="ipod", loglevel="info") 
+                # استفاده از t=Duration برای دقت برش 
+                .output(final_output_filename, t=duration_hms, c=codec, map="0:a:0", f="ipod", loglevel="info") 
             )
         else:
-            # برش MP3 با رمزگذاری مجدد (حالا map="0:a:0" را دارد)
+            # برش MP3 با رمزگذاری مجدد
             ffmpeg_process = (
                 ffmpeg
                 .input(downloaded_file_path, ss=start) 
-                # f="mp3" فرمت کانتینر MP3 را اجبار می‌کند
-                .output(final_output_filename, to=end, acodec=codec, audio_bitrate="192k", map="0:a:0", f="mp3", loglevel="info") 
+                # استفاده از t=Duration و پارامتر map="0:a:0" برای رفع مشکل قبلی
+                .output(final_output_filename, t=duration_hms, acodec=codec, audio_bitrate="192k", map="0:a:0", f="mp3", loglevel="info") 
             )
             
-        # --- اجرای FFmpeg (به صورت غیر-بلاک برای جلوگیری از هنگ کردن ربات) ---
-        # (این بخش از قبل درست بود و باید بماند)
+        # --- اجرای FFmpeg (به صورت غیر-بلاک) ---
         await asyncio.to_thread(ffmpeg_process.run, overwrite_output=True)
             
         # --- آپلود و ارسال نتیجه ---
