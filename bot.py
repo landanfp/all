@@ -6,7 +6,6 @@ import ffmpeg
 from datetime import timedelta
 
 # --- تنظیمات ---
-# مقادیر شما
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 BOT_TOKEN = '5355055672:AAEE8OIOqLYxbnwesF3ki2sOsXr03Q90JiI'
@@ -38,7 +37,9 @@ async def handle_callback(_, callback_query):
         user_state[user_id] = {
             "step": "awaiting_video"
         }
-        await callback_query.message.reply("لطفاً ویدیوی موردنظر را ارسال کنید.")
+        # ذخیره ID پیام راهنما برای حذف
+        prompt_msg = await callback_query.message.reply("لطفاً ویدیوی موردنظر را ارسال کنید.")
+        user_state[user_id]["prompt_msg_id"] = prompt_msg.id
         await callback_query.answer()
 
     elif callback_query.data == "cut_now":
@@ -69,7 +70,7 @@ async def handle_callback(_, callback_query):
             (
                 ffmpeg
                 .input(temp_input, ss=start, to=end)
-                .output(temp_output, c="copy", loglevel="error") # loglevel="error" برای کاهش خروجی کنسول
+                .output(temp_output, c="copy", loglevel="error") 
                 .run(overwrite_output=True)
             )
 
@@ -102,6 +103,14 @@ async def handle_video(_, message):
     if user_id not in user_state or user_state[user_id].get("step") != "awaiting_video":
         return
 
+    # حذف پیام راهنمای قبلی (لطفاً ویدیوی موردنظر را ارسال کنید.)
+    if "prompt_msg_id" in user_state[user_id]:
+        try:
+            await app.delete_messages(message.chat.id, user_state[user_id]["prompt_msg_id"])
+        except Exception:
+            # اگر پیام پیدا نشد یا قبلاً حذف شده بود، مهم نیست.
+            pass
+
     duration = seconds_to_hms(message.video.duration)
 
     text = (
@@ -120,7 +129,9 @@ async def handle_video(_, message):
         "end_time": None
     })
 
-    await message.reply("لطفاً تایم شروع را ارسال کنید (hh:mm:ss)")
+    # ارسال و ذخیره ID پیام راهنما برای مرحله بعد (تایم شروع)
+    prompt_msg = await message.reply("لطفاً تایم شروع را ارسال کنید (hh:mm:ss)")
+    user_state[user_id]["prompt_msg_id"] = prompt_msg.id
 
 @app.on_message(filters.text)
 async def handle_time(_, message):
@@ -134,10 +145,20 @@ async def handle_time(_, message):
 
     # دریافت شیء پیام ویرایش‌پذیر
     try:
-        # استفاده از app.get_messages برای دریافت شیء پیام با استفاده از ID
         video_msg = await app.get_messages(chat_id, state["video_edit_msg"])
     except Exception:
-        return # اگر پیام اصلی حذف شده باشد
+        return
+
+    # 1. حذف پیام ورودی کاربر
+    user_message_id = message.id
+    # 2. حذف پیام راهنمای ربات (از مرحله قبل)
+    prompt_message_id = state.pop("prompt_msg_id", None)
+
+    if prompt_message_id:
+        try:
+            await app.delete_messages(chat_id, [user_message_id, prompt_message_id])
+        except Exception:
+            pass # نادیده گرفتن خطا در حذف پیام‌ها
 
     if state["step"] == "awaiting_start":
         user_state[user_id]["start_time"] = message.text
@@ -148,20 +169,22 @@ async def handle_time(_, message):
             f"⏳ تایم شروع: {state['start_time']}\n"
             f"⏳ تایم پایان: ..."
         )
-        # رفع مشکل بروزرسانی: استفاده از متد استاندارد .edit_text()
         await video_msg.edit_text(new_text)
-        await message.reply("حالا تایم پایان را وارد کنید (hh:mm:ss)")
+        
+        # ارسال و ذخیره ID پیام راهنما برای مرحله بعد (تایم پایان)
+        prompt_msg = await message.reply("حالا تایم پایان را وارد کنید (hh:mm:ss)")
+        user_state[user_id]["prompt_msg_id"] = prompt_msg.id
 
     elif state["step"] == "awaiting_end":
         user_state[user_id]["end_time"] = message.text
         state["step"] = "ready"
+        # در این مرحله دیگر نیازی به ذخیره prompt_msg_id جدید نیست چون آخرین مرحله است.
 
         new_text = (
             f"⏱ زمان ویدیو: {state['duration']}\n"
             f"⏳ تایم شروع: {state['start_time']}\n"
             f"⏳ تایم پایان: {state['end_time']}"
         )
-        # رفع مشکل بروزرسانی: استفاده از متد استاندارد .edit_text() و افزودن دکمه
         await video_msg.edit_text(new_text, reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton("شروع برش", callback_data="cut_now")]]
         ))
