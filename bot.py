@@ -1,18 +1,16 @@
 import os
 import asyncio
 import ffmpeg
-# --- واردات Pyrogram و هندلرها ---
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
-from pyrogram.handlers import MessageHandler # برای ثبت صحیح هندلر صدا
+from pyrogram.handlers import MessageHandler
 
-# --- واردات Health Check ---
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import threading
-
-# <<< ایمپورت متغیرهای مشترک از config.py (برای رفع خطای Import چرخشی) >>>
-from config import API_ID, API_HASH, BOT_TOKEN, app, user_state, seconds_to_hms 
-from audio_trimmer import handle_audio_file, cut_audio_action 
+# <<< ایمپورت متغیرهای مشترک و توابع مورد نیاز >>>
+from config import API_ID, API_HASH, BOT_TOKEN, app, user_state, seconds_to_hms
+from audio_trimmer import handle_audio_file, cut_audio_action # این دو تابع از audio_trimmer ایمپورت می‌شوند
 
 # ===============================================
 # --- بخش Health Check ---
@@ -28,7 +26,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
 
 def run_health_server():
     """شروع سرور HTTP در پورت 8000."""
-    server_address = ('0.0.0.0', 8000) # اگر در هاست ابری هستید، ممکن است نیاز به استفاده از os.environ.get('PORT', 8000) باشد.
+    server_address = ('0.0.0.0', 8000)
     try:
         httpd = HTTPServer(server_address, HealthCheckHandler)
         print("✅ Health Check Server started on port 8000.")
@@ -46,7 +44,7 @@ async def start(_, message):
     keyboard = InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("✂️ شروع برش ویدیو", callback_data="start_cutting")],
-            [InlineKeyboardButton("🎧 شروع برش صدا", callback_data="start_audio_cutting")] # دکمه جدید
+            [InlineKeyboardButton("🎧 شروع برش صدا", callback_data="start_audio_cutting")]
         ]
     )
     await message.reply("سلام! برای برش ویدیو یا صدا روی دکمه موردنظر کلیک کن:", reply_markup=keyboard)
@@ -66,7 +64,6 @@ async def handle_callback(client, callback_query):
         user_state[user_id]["prompt_msg_id"] = prompt_msg.id
         await callback_query.answer()
     
-    # <<< بلاک جدید برای شروع برش صدا >>>
     elif callback_query.data == "start_audio_cutting":
         user_state[user_id] = {
             "step": "awaiting_audio",
@@ -76,7 +73,7 @@ async def handle_callback(client, callback_query):
         user_state[user_id]["prompt_msg_id"] = prompt_msg.id
         await callback_query.answer()
 
-    # <<< مدیریت برش ویدیو >>>
+    # <<< مدیریت برش ویدیو (با اصلاح Duration) >>>
     elif callback_query.data == "cut_now":
         state = user_state.get(user_id)
         if not state or state.get("media_type") != "video":
@@ -106,15 +103,29 @@ async def handle_callback(client, callback_query):
             start = state["start_time"]
             end = state["end_time"]
 
+            # --- محاسبه Duration برای برش دقیق ---
+            # تبدیل Start و End به ثانیه
+            start_seconds = sum(x * int(t) for x, t in zip([3600, 60, 1], start.split(':')))
+            end_seconds = sum(x * int(t) for x, t in zip([3600, 60, 1], end.split(':')))
+
+            # محاسبه Duration (مدت زمان برش)
+            duration_seconds = end_seconds - start_seconds
+            
+            # Duration را به رشته hh:mm:ss تبدیل می‌کنیم
+            duration_hms = seconds_to_hms(duration_seconds)
+            # ------------------------------------
+
             await processing_msg.edit_text("⚡️ در حال برش سریع (کپی جریان)...")
 
-            # --- برش با FFmpeg: استفاده از Stream Copy (فوق سریع) ---
-            (
+            # --- برش با FFmpeg: استفاده از Stream Copy و پارامتر Duration (t) ---
+            ffmpeg_process = (
                 ffmpeg
                 .input(downloaded_file_path, ss=start) 
-                .output(temp_output, to=end, c="copy", loglevel="error")
-                .run(overwrite_output=True)
+                .output(temp_output, t=duration_hms, c="copy", loglevel="error")
             )
+            
+            # اجرای FFmpeg به صورت غیر-بلاک
+            await asyncio.to_thread(ffmpeg_process.run, overwrite_output=True)
 
             await processing_msg.edit_text("📤 در حال ارسال ویدیوی برش‌خورده...")
             await app.send_video(chat_id, temp_output)
@@ -122,7 +133,7 @@ async def handle_callback(client, callback_query):
 
         except ffmpeg.Error as e:
             error_details = e.stderr.decode('utf8', errors='ignore') if e.stderr else "جزئیات خطا نامشخص است."
-            await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`\n\n**توجه:** این خطا ممکن است به دلیل عدم امکان برش دقیق در نقطه زمانی درخواستی (Keyframe) رخ داده باشد. اگر ادامه داشت، باید از روش کندتر استفاده کرد.")
+            await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`")
         except Exception as e:
             await app.send_message(chat_id, f"❌ یک خطای غیرمنتظره رخ داد: دانلود یا پردازش با مشکل مواجه شد. `{e}`")
         finally:
@@ -153,6 +164,7 @@ async def handle_video(_, message):
         except Exception:
             pass
 
+    # این بخش مدت زمان کلی ویدیو را نمایش می‌دهد و تحت تأثیر قرار نگرفته است
     duration = seconds_to_hms(message.video.duration)
 
     text = (
@@ -166,7 +178,7 @@ async def handle_video(_, message):
         "step": "awaiting_start",
         "media_type": "video",
         "video_msg_id": message.id,
-        "media_edit_msg": sent_msg.id, # استفاده از media_edit_msg برای سازگاری با handle_time
+        "media_edit_msg": sent_msg.id,
         "duration": duration,
         "start_time": None,
         "end_time": None
@@ -235,14 +247,13 @@ async def handle_time(_, message):
 # --- ثبت هندلرها و شروع برنامه اصلی ---
 # ===============================================
 
-# <<< ثبت هندلر فایل صوتی با فیلتر filters.audio >>>
 app.add_handler(MessageHandler(handle_audio_file, filters.audio))
 
 
 if __name__ == "__main__":
     # 1. سرور Health Check را در یک Thread جداگانه شروع می‌کنیم.
     health_thread = threading.Thread(target=run_health_server)
-    health_thread.daemon = True 
+    health_thread.daemon = True
     health_thread.start()
 
     # 2. ربات Pyrogram را شروع می‌کنیم.
