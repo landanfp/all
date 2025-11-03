@@ -41,7 +41,6 @@ def run_health_server():
     try:
         httpd = HTTPServer(server_address, HealthCheckHandler)
         print("✅ Health Check Server started on port 8000.")
-        # serve_forever سرور را فعال نگه می‌دارد
         httpd.serve_forever()
     except Exception as e:
         print(f"❌ Failed to start Health Check Server: {e}")
@@ -102,19 +101,15 @@ async def handle_callback(_, callback_query):
             start = state["start_time"]
             end = state["end_time"]
 
-            await processing_msg.edit_text("⚙️ در حال پردازش و برش دقیق ویدیو (کمی صبر کنید)...")
+            await processing_msg.edit_text("⚡️ در حال برش سریع (کپی جریان)...")
 
-            # --- برش با FFmpeg (با رمزگذاری مجدد برای برش دقیق) ---
+            # --- برش با FFmpeg: استفاده از Stream Copy (فوق سریع) ---
+            # قرار دادن ss قبل از input برای جستجوی سریع (Fast Seek)
             (
                 ffmpeg
-                .input(downloaded_file_path, ss=start)
-                .output(temp_output, to=end, 
-                        vcodec='libx264', 
-                        acodec='aac', 
-                        f='mp4',
-                        preset='veryfast',
-                        movflags='faststart',
-                        loglevel="error")
+                .input(downloaded_file_path, ss=start) 
+                # استفاده از c="copy" برای کپی بدون رمزگذاری مجدد
+                .output(temp_output, to=end, c="copy", loglevel="error")
                 .run(overwrite_output=True)
             )
 
@@ -124,8 +119,9 @@ async def handle_callback(_, callback_query):
             await processing_msg.edit_text("✅ تمام شد! ویدیوی برش‌خورده ارسال شد.")
 
         except ffmpeg.Error as e:
+            # اگر خطای FFmpeg دوباره رخ دهد، به کاربر می‌گوییم که به دلیل برش در Keyframe نیست.
             error_details = e.stderr.decode('utf8', errors='ignore') if e.stderr else "جزئیات خطا نامشخص است."
-            await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`")
+            await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`\n\n**توجه:** این خطا ممکن است به دلیل عدم امکان برش دقیق در نقطه زمانی درخواستی (Keyframe) رخ داده باشد. اگر ادامه داشت، باید از روش کندتر استفاده کرد.")
         except Exception as e:
             await app.send_message(chat_id, f"❌ یک خطای غیرمنتظره رخ داد: دانلود یا پردازش با مشکل مواجه شد. `{e}`")
         finally:
@@ -232,7 +228,6 @@ async def handle_time(_, message):
 if __name__ == "__main__":
     # 1. سرور Health Check را در یک Thread جداگانه شروع می‌کنیم.
     health_thread = threading.Thread(target=run_health_server)
-    # این باعث می‌شود Thread به محض پایان یافتن برنامه اصلی، متوقف شود.
     health_thread.daemon = True 
     health_thread.start()
 
