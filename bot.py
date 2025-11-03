@@ -7,13 +7,14 @@ from datetime import timedelta
 # --- واردات جدید برای رفع خطای Health Check ---
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
-
+from config import API_ID, API_HASH, BOT_TOKEN, app, user_state, seconds_to_hms
 # <<< واردات جدید برای برش صدا >>>
 # دو تابع اصلی را از فایل audio_trimmer.py ایمپورت می‌کنیم.
 from audio_trimmer import handle_audio_file, cut_audio_action 
 
 
 # --- تنظیمات (Configuration) ---
+
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 BOT_TOKEN = '8189638115:AAEYMDvummCXAPgdpavZbYHa3YuXpOzkRBY'
