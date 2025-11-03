@@ -4,12 +4,15 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import ffmpeg
 from datetime import timedelta
+# --- واردات جدید برای رفع خطای Health Check ---
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
 
 # --- تنظیمات (Configuration) ---
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 BOT_TOKEN = '1396293494:AAFY7RXygNEZPFPXfmoJ66SljlXeCSilXG0'
-#LOG_CHANNEL = -1001792962793  # مقدار دلخواه 
+#LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
 app = Client("trim_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -18,6 +21,34 @@ user_state = {}
 def seconds_to_hms(seconds):
     """تبدیل ثانیه به فرمت زمان (hh:mm:ss)."""
     return str(timedelta(seconds=seconds))
+
+# ===============================================
+# --- بخش جدید: سرور Health Check ---
+# ===============================================
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    """پاسخ دهنده ساده به درخواست‌های HTTP برای بررسی سلامت."""
+    def do_GET(self):
+        # پاسخ 200 OK
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b"Bot is alive and running!")
+
+def run_health_server():
+    """شروع سرور HTTP در پورت 8000."""
+    server_address = ('0.0.0.0', 8000)
+    try:
+        httpd = HTTPServer(server_address, HealthCheckHandler)
+        print("✅ Health Check Server started on port 8000.")
+        # serve_forever سرور را فعال نگه می‌دارد
+        httpd.serve_forever()
+    except Exception as e:
+        print(f"❌ Failed to start Health Check Server: {e}")
+
+# ===============================================
+# --- توابع ربات ---
+# ===============================================
 
 @app.on_message(filters.command("start"))
 async def start(_, message):
@@ -37,7 +68,6 @@ async def handle_callback(_, callback_query):
         user_state[user_id] = {
             "step": "awaiting_video"
         }
-        # ذخیره ID پیام راهنما برای حذف
         prompt_msg = await callback_query.message.reply("لطفاً ویدیوی موردنظر را ارسال کنید.")
         user_state[user_id]["prompt_msg_id"] = prompt_msg.id
         await callback_query.answer()
@@ -55,24 +85,19 @@ async def handle_callback(_, callback_query):
         except Exception:
             pass
 
-        # متغیرهای مربوط به فایل
         expected_input_filename = f"{user_id}_input.mp4"
         temp_output = f"{user_id}_cut.mp4"
-        downloaded_file_path = None # مسیر واقعی فایل دانلود شده
+        downloaded_file_path = None
 
         try:
-            # --- دانلود ویدیو ---
+            # --- دانلود ویدیو (مسیر واقعی فایل را دریافت می‌کنیم) ---
             video_msg = await app.get_messages(chat_id, state["video_msg_id"])
             
             processing_msg = await callback_query.message.reply("🔄 در حال دانلود ویدیو...")
-            
-            # متد download() مسیر واقعی فایل را برمی‌گرداند.
             downloaded_file_path = await video_msg.download(expected_input_filename)
             
-            # بررسی اینکه آیا دانلود موفقیت‌آمیز بوده و فایل موجود است
             if not downloaded_file_path or not os.path.exists(downloaded_file_path):
                 raise Exception("دانلود ویدیو ناموفق بود یا فایل ورودی پیدا نشد.")
-
 
             start = state["start_time"]
             end = state["end_time"]
@@ -82,7 +107,7 @@ async def handle_callback(_, callback_query):
             # --- برش با FFmpeg (با رمزگذاری مجدد برای برش دقیق) ---
             (
                 ffmpeg
-                .input(downloaded_file_path, ss=start) # استفاده از مسیر واقعی برگشتی از Pyrogram
+                .input(downloaded_file_path, ss=start)
                 .output(temp_output, to=end, 
                         vcodec='libx264', 
                         acodec='aac', 
@@ -99,18 +124,14 @@ async def handle_callback(_, callback_query):
             await processing_msg.edit_text("✅ تمام شد! ویدیوی برش‌خورده ارسال شد.")
 
         except ffmpeg.Error as e:
-            # خطای FFmpeg
             error_details = e.stderr.decode('utf8', errors='ignore') if e.stderr else "جزئیات خطا نامشخص است."
             await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`")
         except Exception as e:
-            # خطای غیرمنتظره دیگر (مثل خطای دانلود)
             await app.send_message(chat_id, f"❌ یک خطای غیرمنتظره رخ داد: دانلود یا پردازش با مشکل مواجه شد. `{e}`")
         finally:
             # --- پاکسازی فایل‌ها و وضعیت ---
-            # پاکسازی فایل دانلود شده با استفاده از مسیر تایید شده
             if downloaded_file_path and os.path.exists(downloaded_file_path):
                 os.remove(downloaded_file_path)
-            # پاکسازی فایل خروجی
             if os.path.exists(temp_output):
                 os.remove(temp_output)
             
@@ -126,12 +147,10 @@ async def handle_video(_, message):
     if user_id not in user_state or user_state[user_id].get("step") != "awaiting_video":
         return
 
-    # حذف پیام راهنمای قبلی (لطفاً ویدیوی موردنظر را ارسال کنید.)
     if "prompt_msg_id" in user_state[user_id]:
         try:
             await app.delete_messages(message.chat.id, user_state[user_id]["prompt_msg_id"])
         except Exception:
-            # اگر پیام پیدا نشد یا قبلاً حذف شده بود، مهم نیست.
             pass
 
     duration = seconds_to_hms(message.video.duration)
@@ -152,7 +171,6 @@ async def handle_video(_, message):
         "end_time": None
     })
 
-    # ارسال و ذخیره ID پیام راهنما برای مرحله بعد (تایم شروع)
     prompt_msg = await message.reply("لطفاً تایم شروع را ارسال کنید (hh:mm:ss)")
     user_state[user_id]["prompt_msg_id"] = prompt_msg.id
 
@@ -166,23 +184,19 @@ async def handle_time(_, message):
     if not state:
         return
 
-    # دریافت شیء پیام ویرایش‌پذیر
     try:
         video_msg = await app.get_messages(chat_id, state["video_edit_msg"])
     except Exception:
         return
 
-    # 1. حذف پیام ورودی کاربر
     user_message_id = message.id
-    # 2. حذف پیام راهنمای ربات (از مرحله قبل)
     prompt_message_id = state.pop("prompt_msg_id", None)
 
     if prompt_message_id:
         try:
-            # سعی می‌کنیم هر دو پیام را همزمان حذف کنیم
             await app.delete_messages(chat_id, [user_message_id, prompt_message_id])
         except Exception:
-            pass # نادیده گرفتن خطا در حذف پیام‌ها
+            pass
 
     if state["step"] == "awaiting_start":
         user_state[user_id]["start_time"] = message.text
@@ -195,14 +209,12 @@ async def handle_time(_, message):
         )
         await video_msg.edit_text(new_text)
         
-        # ارسال و ذخیره ID پیام راهنما برای مرحله بعد (تایم پایان)
         prompt_msg = await message.reply("حالا تایم پایان را وارد کنید (hh:mm:ss)")
         user_state[user_id]["prompt_msg_id"] = prompt_msg.id
 
     elif state["step"] == "awaiting_end":
         user_state[user_id]["end_time"] = message.text
         state["step"] = "ready"
-        # در این مرحله دیگر نیازی به ذخیره prompt_msg_id جدید نیست چون آخرین مرحله است.
 
         new_text = (
             f"⏱ زمان ویدیو: {state['duration']}\n"
@@ -213,4 +225,16 @@ async def handle_time(_, message):
             [[InlineKeyboardButton("شروع برش", callback_data="cut_now")]]
         ))
 
-app.run()
+# ===============================================
+# --- شروع برنامه اصلی ---
+# ===============================================
+
+if __name__ == "__main__":
+    # 1. سرور Health Check را در یک Thread جداگانه شروع می‌کنیم.
+    health_thread = threading.Thread(target=run_health_server)
+    # این باعث می‌شود Thread به محض پایان یافتن برنامه اصلی، متوقف شود.
+    health_thread.daemon = True 
+    health_thread.start()
+
+    # 2. ربات Pyrogram را شروع می‌کنیم.
+    app.run()
