@@ -8,7 +8,7 @@ from datetime import timedelta
 # --- تنظیمات (Configuration) ---
 API_ID = '3335792' # مثال، لطفاً از مقادیر واقعی خود استفاده کنید
 API_HASH = '138b992a0e672e8346d8439c3f42ea78' # مثال، لطفاً از مقادیر واقعی خود استفاده کنید
-BOT_TOKEN = '5355055672:AAEE8OIOqLYxbnwesF3ki2sOsXr03Q90JiI' # مثال، لطفاً از مقادیر واقعی خود استفاده کنید
+BOT_TOKEN = '1396293494:AAFY7RXygNEZPFPXfmoJ66SljlXeCSilXG0' # مثال، لطفاً از مقادیر واقعی خود استفاده کنید
 LOG_CHANNEL = -1001792962793 
 
 app = Client("trim_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
