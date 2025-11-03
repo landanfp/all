@@ -57,6 +57,10 @@ async def handle_audio_file(client: Client, message: Message):
     user_state[user_id]["prompt_msg_id"] = prompt_msg.id
 
 
+# audio_trimmer.py
+
+# ... (ایمپورت‌های بالای فایل، شامل 'import asyncio' باید باشد) ...
+
 async def cut_audio_action(client: Client, callback_query):
     """منطق برش فایل صوتی."""
     user_id = callback_query.from_user.id
@@ -95,17 +99,25 @@ async def cut_audio_action(client: Client, callback_query):
         start = state["start_time"]
         end = state["end_time"]
         
-        # <<< کد جدید: تعیین نوع فایل و حالت برش >>>
-        _, file_extension = os.path.splitext(downloaded_file_path)
-        is_mp3 = file_extension.lower() == '.mp3'
+        # ================================================================
+        # <<< ===== این بخش کلیدی و اصلاح شده است ===== >>>
+        # به جای بررسی پسوند فایل، نوع MIME پیام را بررسی می‌کنیم
+        
+        mime_type = audio_msg.audio.mime_type.lower() if audio_msg.audio.mime_type else ""
+        print(f"DEBUG: Detected MIME type: {mime_type}")
+
+        # 'audio/mpeg' یا 'audio/mp3' هر دو به معنی MP3 هستند
+        is_mp3 = 'mpeg' in mime_type or 'mp3' in mime_type
+        # ================================================================
         
         if is_mp3:
             codec = "libmp3lame"
             cut_mode = "رمزگذاری مجدد MP3 (کندتر اما دقیق)"
             final_output_filename = output_filename_mp3
         else:
+            # فرض می‌کنیم M4A یا فرمت دیگری است که کپی سریع را می‌پذیرد
             codec = "copy"
-            cut_mode = "کپی سریع جریان (فوق سریع)"
+            cut_mode = "کپی سریع جریان (M4A/AAC)"
             final_output_filename = output_filename_m4a
 
         print(f"DEBUG: Trimming audio file: {downloaded_file_path} from {start} to {end} using {cut_mode}.")
@@ -115,43 +127,43 @@ async def cut_audio_action(client: Client, callback_query):
         # --- تعریف دستور FFmpeg ---
         ffmpeg_process = None
         if codec == "copy":
-            # برش M4A با کپی مستقیم
+            # برش M4A (یا فرمت‌های مشابه) با کپی مستقیم
             ffmpeg_process = (
                 ffmpeg
                 .input(downloaded_file_path, ss=start) 
-                .output(final_output_filename, to=end, c=codec, map="0:a:0", loglevel="info") 
+                # f="ipod" فرمت کانتینر M4A را اجبار می‌کند
+                .output(final_output_filename, to=end, c=codec, map="0:a:0", f="ipod", loglevel="info") 
             )
         else:
-            # برش MP3 با رمزگذاری مجدد
+            # برش MP3 با رمزگذاری مجدد (حالا map="0:a:0" را دارد)
             ffmpeg_process = (
                 ffmpeg
                 .input(downloaded_file_path, ss=start) 
-                # ===== نکته اصلاحی اصلی اینجا بود =====
-                .output(final_output_filename, to=end, acodec=codec, audio_bitrate="192k", map="0:a:0", loglevel="info") 
+                # f="mp3" فرمت کانتینر MP3 را اجبار می‌کند
+                .output(final_output_filename, to=end, acodec=codec, audio_bitrate="192k", map="0:a:0", f="mp3", loglevel="info") 
             )
             
         # --- اجرای FFmpeg (به صورت غیر-بلاک برای جلوگیری از هنگ کردن ربات) ---
+        # (این بخش از قبل درست بود و باید بماند)
         await asyncio.to_thread(ffmpeg_process.run, overwrite_output=True)
             
         # --- آپلود و ارسال نتیجه ---
         await processing_msg.edit_text("📤 در حال ارسال فایل صوتی برش‌خورده...")
-        await app.send_audio(chat_id, final_output_filename) # استفاده از نام فایل خروجی صحیح
+        await app.send_audio(chat_id, final_output_filename) 
         await processing_msg.edit_text("✅ تمام شد! فایل صوتی برش‌خورده ارسال شد.")
 
     except ffmpeg.Error as e:
-        # بهبود لاگ خطا
-        error_details = e.stderr.decode('utf8', errors='ignore') if e.stderr else "جزئیات خطا نامشخص است (FFmpeg خروجی خطا نداد). احتمالاً مشکل در پارامترهای زمان یا فایل ورودی آسیب دیده است."
-        # لاگ کامل‌تر در کنسول
+        error_details = e.stderr.decode('utf8', errors='ignore') if e.stderr else "جزئیات خطا نامشخص است."
         print(f"--- FFmpeg Error Details ---\n{error_details}\n-------------------------")
-        await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`\n\n**توجه:** اگر فایل MP3 بود، به دلیل رمزگذاری مجد نباید خطا می‌داد.")
+        await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`")
     except Exception as e:
-        await app.send_message(chat_id, f"❌ یک خطای غیرمنتظره رخ داد: دانلود یا پردازش با مشکل مواجه شد. `{e}`")
+        print(f"--- General Error ---: {e}")
+        await app.send_message(chat_id, f"❌ یک خطای غیرمنتظره رخ داد: `{e}`")
     finally:
         # --- پاکسازی فایل‌ها و وضعیت ---
         if downloaded_file_path and os.path.exists(downloaded_file_path):
             os.remove(downloaded_file_path)
         
-        # پاکسازی هر دو فایل خروجی موقت احتمالی
         if os.path.exists(output_filename_m4a):
             os.remove(output_filename_m4a)
         if os.path.exists(output_filename_mp3):
