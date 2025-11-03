@@ -5,10 +5,10 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import ffmpeg
 from datetime import timedelta
 
-# --- تنظیمات ---
-API_ID = '3335796'
-API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '5355055672:AAEE8OIOqLYxbnwesF3ki2sOsXr03Q90JiI'
+# --- تنظیمات (Configuration) ---
+API_ID = '3335792' # مثال، لطفاً از مقادیر واقعی خود استفاده کنید
+API_HASH = '138b992a0e672e8346d8439c3f42ea78' # مثال، لطفاً از مقادیر واقعی خود استفاده کنید
+BOT_TOKEN = '5355055672:AAEE8OIOqLYxbnwesF3ki2sOsXr03Q90JiI' # مثال، لطفاً از مقادیر واقعی خود استفاده کنید
 LOG_CHANNEL = -1001792962793 
 
 app = Client("trim_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -23,7 +23,7 @@ def seconds_to_hms(seconds):
 async def start(_, message):
     """پاسخ به دستور /start و نمایش دکمه شروع."""
     keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("✂️", callback_data="start_cutting")]]
+        [[InlineKeyboardButton("✂️ شروع برش", callback_data="start_cutting")]]
     )
     await message.reply("سلام! برای برش ویدیو روی دکمه زیر کلیک کن:", reply_markup=keyboard)
 
@@ -49,7 +49,13 @@ async def handle_callback(_, callback_query):
             return
 
         await callback_query.answer("در حال برش...")
-        await callback_query.message.edit_reply_markup(reply_markup=None) 
+        
+        # ویرایش پیام دکمه برای حذف دکمه
+        try:
+            await callback_query.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            # ممکن است پیام قبلاً توسط کاربر یا ربات تغییر داده شده باشد
+            pass
 
         temp_input = f"{user_id}_input.mp4"
         temp_output = f"{user_id}_cut.mp4"
@@ -58,19 +64,33 @@ async def handle_callback(_, callback_query):
             # --- دانلود ویدیو ---
             video_msg = await app.get_messages(chat_id, state["video_msg_id"])
             
-            processing_msg = await callback_query.message.reply("🔄 در حال دانلود و پردازش ویدیو...")
+            processing_msg = await callback_query.message.reply("🔄 در حال دانلود ویدیو...")
             await video_msg.download(temp_input)
 
             start = state["start_time"]
             end = state["end_time"]
 
-            await processing_msg.edit_text("⚙️ در حال پردازش ویدیو...")
+            await processing_msg.edit_text("⚙️ در حال پردازش و برش دقیق ویدیو (کمی صبر کنید)...")
 
-            # --- برش با FFmpeg (با استفاده از c="copy" برای سرعت) ---
+            # --------------------------------------------------------------------------
+            # --- برش با FFmpeg (رفع مشکل: حذف c="copy" و استفاده از Re-encoding) ---
+            #
+            # برای اطمینان از صحت برش در هر زمانی، از رمزگذاری مجدد استفاده می‌کنیم:
+            # vcodec='libx264' و acodec='aac' - کدک‌های استاندارد برای MP4
+            # preset='veryfast' - برای سرعت بخشیدن به رمزگذاری
+            # movflags='faststart' - برای شروع سریع پخش در وب
+            # --------------------------------------------------------------------------
+            
             (
                 ffmpeg
-                .input(temp_input, ss=start, to=end)
-                .output(temp_output, c="copy", loglevel="error") 
+                .input(temp_input, ss=start) # ss (تایم شروع) را قبل از ورودی قرار می‌دهیم
+                .output(temp_output, to=end, 
+                        vcodec='libx264', 
+                        acodec='aac', 
+                        f='mp4',
+                        preset='veryfast',
+                        movflags='faststart',
+                        loglevel="error") # to (تایم پایان) را برای خروجی مشخص می‌کنیم
                 .run(overwrite_output=True)
             )
 
@@ -80,19 +100,21 @@ async def handle_callback(_, callback_query):
             await processing_msg.edit_text("✅ تمام شد! ویدیوی برش‌خورده ارسال شد.")
 
         except ffmpeg.Error as e:
+            # تلاش برای استخراج جزئیات خطا از FFmpeg
             error_details = e.stderr.decode('utf8', errors='ignore') if e.stderr else "جزئیات خطا نامشخص است."
             await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`")
         except Exception as e:
-            await app.send_message(chat_id, f"❌ یک خطای غیرمنتظره رخ داد: {e}")
+            # خطای غیرمنتظره دیگر
+            await app.send_message(chat_id, f"❌ یک خطای غیرمنتظره رخ داد: `{e}`")
         finally:
             # --- پاکسازی فایل‌ها و وضعیت ---
             if os.path.exists(temp_input):
-                os.remove(temp_input)
+                os.path.exists(temp_input) and os.remove(temp_input)
             if os.path.exists(temp_output):
-                os.remove(temp_output)
+                os.path.exists(temp_output) and os.remove(temp_output)
             
             if user_id in user_state:
-                 del user_state[user_id]
+                del user_state[user_id]
 
 
 @app.on_message(filters.video)
@@ -156,6 +178,7 @@ async def handle_time(_, message):
 
     if prompt_message_id:
         try:
+            # سعی می‌کنیم هر دو پیام را همزمان حذف کنیم
             await app.delete_messages(chat_id, [user_message_id, prompt_message_id])
         except Exception:
             pass # نادیده گرفتن خطا در حذف پیام‌ها
