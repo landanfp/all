@@ -50,47 +50,46 @@ async def handle_callback(_, callback_query):
 
         await callback_query.answer("در حال برش...")
         
-        # ویرایش پیام دکمه برای حذف دکمه
         try:
             await callback_query.message.edit_reply_markup(reply_markup=None)
         except Exception:
-            # ممکن است پیام قبلاً توسط کاربر یا ربات تغییر داده شده باشد
             pass
 
-        temp_input = f"{user_id}_input.mp4"
+        # متغیرهای مربوط به فایل
+        expected_input_filename = f"{user_id}_input.mp4"
         temp_output = f"{user_id}_cut.mp4"
+        downloaded_file_path = None # مسیر واقعی فایل دانلود شده
 
         try:
             # --- دانلود ویدیو ---
             video_msg = await app.get_messages(chat_id, state["video_msg_id"])
             
             processing_msg = await callback_query.message.reply("🔄 در حال دانلود ویدیو...")
-            await video_msg.download(temp_input)
+            
+            # متد download() مسیر واقعی فایل را برمی‌گرداند.
+            downloaded_file_path = await video_msg.download(expected_input_filename)
+            
+            # بررسی اینکه آیا دانلود موفقیت‌آمیز بوده و فایل موجود است
+            if not downloaded_file_path or not os.path.exists(downloaded_file_path):
+                raise Exception("دانلود ویدیو ناموفق بود یا فایل ورودی پیدا نشد.")
+
 
             start = state["start_time"]
             end = state["end_time"]
 
             await processing_msg.edit_text("⚙️ در حال پردازش و برش دقیق ویدیو (کمی صبر کنید)...")
 
-            # --------------------------------------------------------------------------
-            # --- برش با FFmpeg (رفع مشکل: حذف c="copy" و استفاده از Re-encoding) ---
-            #
-            # برای اطمینان از صحت برش در هر زمانی، از رمزگذاری مجدد استفاده می‌کنیم:
-            # vcodec='libx264' و acodec='aac' - کدک‌های استاندارد برای MP4
-            # preset='veryfast' - برای سرعت بخشیدن به رمزگذاری
-            # movflags='faststart' - برای شروع سریع پخش در وب
-            # --------------------------------------------------------------------------
-            
+            # --- برش با FFmpeg (با رمزگذاری مجدد برای برش دقیق) ---
             (
                 ffmpeg
-                .input(temp_input, ss=start) # ss (تایم شروع) را قبل از ورودی قرار می‌دهیم
+                .input(downloaded_file_path, ss=start) # استفاده از مسیر واقعی برگشتی از Pyrogram
                 .output(temp_output, to=end, 
                         vcodec='libx264', 
                         acodec='aac', 
                         f='mp4',
                         preset='veryfast',
                         movflags='faststart',
-                        loglevel="error") # to (تایم پایان) را برای خروجی مشخص می‌کنیم
+                        loglevel="error")
                 .run(overwrite_output=True)
             )
 
@@ -100,18 +99,20 @@ async def handle_callback(_, callback_query):
             await processing_msg.edit_text("✅ تمام شد! ویدیوی برش‌خورده ارسال شد.")
 
         except ffmpeg.Error as e:
-            # تلاش برای استخراج جزئیات خطا از FFmpeg
+            # خطای FFmpeg
             error_details = e.stderr.decode('utf8', errors='ignore') if e.stderr else "جزئیات خطا نامشخص است."
             await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`")
         except Exception as e:
-            # خطای غیرمنتظره دیگر
-            await app.send_message(chat_id, f"❌ یک خطای غیرمنتظره رخ داد: `{e}`")
+            # خطای غیرمنتظره دیگر (مثل خطای دانلود)
+            await app.send_message(chat_id, f"❌ یک خطای غیرمنتظره رخ داد: دانلود یا پردازش با مشکل مواجه شد. `{e}`")
         finally:
             # --- پاکسازی فایل‌ها و وضعیت ---
-            if os.path.exists(temp_input):
-                os.path.exists(temp_input) and os.remove(temp_input)
+            # پاکسازی فایل دانلود شده با استفاده از مسیر تایید شده
+            if downloaded_file_path and os.path.exists(downloaded_file_path):
+                os.remove(downloaded_file_path)
+            # پاکسازی فایل خروجی
             if os.path.exists(temp_output):
-                os.path.exists(temp_output) and os.remove(temp_output)
+                os.remove(temp_output)
             
             if user_id in user_state:
                 del user_state[user_id]
