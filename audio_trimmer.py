@@ -1,5 +1,6 @@
 import os
 import ffmpeg
+import asyncio 
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from pyrogram.errors import MessageNotModified
@@ -75,9 +76,7 @@ async def cut_audio_action(client: Client, callback_query):
     except Exception:
         pass
 
-    # نام فایل ورودی، پسوند خود را از Pyrogram می‌گیرد
-    expected_input_filename = f"{user_id}_input_audio" 
-    # نام فایل‌های خروجی موقت
+    expected_input_filename = f"{user_id}_input_audio"
     output_filename_mp3 = f"{user_id}_cut_audio_re.mp3"
     output_filename_m4a = f"{user_id}_cut_audio.m4a"
     final_output_filename = None
@@ -101,12 +100,10 @@ async def cut_audio_action(client: Client, callback_query):
         is_mp3 = file_extension.lower() == '.mp3'
         
         if is_mp3:
-            # حالت MP3: رمزگذاری مجدد (Re-encode)
             codec = "libmp3lame"
             cut_mode = "رمزگذاری مجدد MP3 (کندتر اما دقیق)"
             final_output_filename = output_filename_mp3
         else:
-            # حالت M4A و بقیه: کپی سریع (Copy Stream)
             codec = "copy"
             cut_mode = "کپی سریع جریان (فوق سریع)"
             final_output_filename = output_filename_m4a
@@ -115,23 +112,26 @@ async def cut_audio_action(client: Client, callback_query):
         
         await processing_msg.edit_text(f"⚡️ در حال برش: {cut_mode}...")
 
-        # --- اجرای FFmpeg ---
+        # --- تعریف دستور FFmpeg ---
+        ffmpeg_process = None
         if codec == "copy":
             # برش M4A با کپی مستقیم
-            (
+            ffmpeg_process = (
                 ffmpeg
                 .input(downloaded_file_path, ss=start) 
                 .output(final_output_filename, to=end, c=codec, map="0:a:0", loglevel="info") 
-                .run(overwrite_output=True)
             )
         else:
             # برش MP3 با رمزگذاری مجدد
-            (
+            ffmpeg_process = (
                 ffmpeg
                 .input(downloaded_file_path, ss=start) 
-                .output(final_output_filename, to=end, acodec=codec, audio_bitrate="192k", loglevel="info") 
-                .run(overwrite_output=True)
+                # ===== نکته اصلاحی اصلی اینجا بود =====
+                .output(final_output_filename, to=end, acodec=codec, audio_bitrate="192k", map="0:a:0", loglevel="info") 
             )
+            
+        # --- اجرای FFmpeg (به صورت غیر-بلاک برای جلوگیری از هنگ کردن ربات) ---
+        await asyncio.to_thread(ffmpeg_process.run, overwrite_output=True)
             
         # --- آپلود و ارسال نتیجه ---
         await processing_msg.edit_text("📤 در حال ارسال فایل صوتی برش‌خورده...")
@@ -141,7 +141,9 @@ async def cut_audio_action(client: Client, callback_query):
     except ffmpeg.Error as e:
         # بهبود لاگ خطا
         error_details = e.stderr.decode('utf8', errors='ignore') if e.stderr else "جزئیات خطا نامشخص است (FFmpeg خروجی خطا نداد). احتمالاً مشکل در پارامترهای زمان یا فایل ورودی آسیب دیده است."
-        await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`\n\n**توجه:** اگر فایل MP3 بود، به دلیل رمزگذاری مجدد نباید خطا می‌داد.")
+        # لاگ کامل‌تر در کنسول
+        print(f"--- FFmpeg Error Details ---\n{error_details}\n-------------------------")
+        await app.send_message(chat_id, f"❌ خطای FFmpeg رخ داد: \n`{error_details}`\n\n**توجه:** اگر فایل MP3 بود، به دلیل رمزگذاری مجد نباید خطا می‌داد.")
     except Exception as e:
         await app.send_message(chat_id, f"❌ یک خطای غیرمنتظره رخ داد: دانلود یا پردازش با مشکل مواجه شد. `{e}`")
     finally:
