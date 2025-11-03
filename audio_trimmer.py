@@ -10,7 +10,7 @@ from pyrogram.errors import RPCError
 # برای دسترسی به متغیرهای مشترک (user_state، app، seconds_to_hms) از ایمپورت مستقیم استفاده می‌شود.
 # توجه: اگر در زمان اجرا خطای ایمپورت (ImportError) گرفتید، ممکن است نیاز باشد
 # متغیرهای user_state و seconds_to_hms را در یک فایل config.py جداگانه تعریف کنید.
-from bot import user_state, seconds_to_hms, app
+from config import user_state, seconds_to_hms, app
 
 # --- توابع برش صدا ---
 
