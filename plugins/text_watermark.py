@@ -46,7 +46,7 @@ async def handle_text_input(client, message: Message):
 async def set_position(client, query: CallbackQuery):
     """دریافت موقعیت و درخواست سایز."""
     user_id = query.from_user.id
-    position = query.data.split("_")[-1]
+    position = query.data.split("_", 2)[-1]  # فیکس: maxsplit=2 برای گرفتن کل 'top_right'
 
     if get_state(user_id, "step") != "position":
         await query.answer("لطفا مراحل را به ترتیب طی کنید.")
