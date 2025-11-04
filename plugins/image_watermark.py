@@ -26,12 +26,21 @@ async def handle_image_upload(client, message: Message):
     """دریافت تصویر واترمارک و درخواست موقعیت (پشتیبانی از photo و document)."""
     user_id = message.from_user.id
     current_step = get_state(user_id, "step")
-    print(f"Debug: Image handler triggered for user {user_id}, current step: {current_step}, type: {'photo' if message.photo else 'document'}")  # لاگ trigger
+    msg_type = 'photo' if message.photo else ('document' if message.document else 'unknown')
+    print(f"Debug: Image handler triggered for user {user_id}, current step: {current_step}, type: {msg_type}")  # لاگ trigger
     
     if current_step != "image_upload":
         print(f"Debug: Wrong step for user {user_id}, skipping.")  # لاگ skip
         await message.reply("❌ لطفا ابتدا گزینه '🖼️ واترمارک تصویری' را انتخاب کنید و مراحل را به ترتیب طی کنید. (/start)")
         return
+
+    # **چک mime_type برای document (فقط image/jpeg یا image/png)**
+    if message.document:
+        mime_type = message.document.mime_type
+        if not mime_type or mime_type not in ['image/jpeg', 'image/png']:
+            print(f"Debug: Invalid mime_type for user {user_id}: {mime_type}")
+            await message.reply("❌ لطفا فقط فایل jpg یا png (به عنوان تصویر) ارسال کنید.")
+            return
 
     # **فیکس: گرفتن file_name از photo (file_unique_id) یا document (file_name)**
     file_name = None
@@ -51,7 +60,7 @@ async def handle_image_upload(client, message: Message):
         await message.reply("❌ خطا در دانلود تصویر. لطفا دوباره امتحان کنید.")
         return
 
-    # چک فرمت بعد دانلود
+    # چک فرمت بعد دانلود (اضافی برای امنیت)
     if not image_file.lower().endswith((".jpg", ".png", ".jpeg")):
         await message.reply("لطفا فقط فایل با فرمت png، jpg یا jpeg ارسال کنید.")
         if os.path.exists(image_file):
