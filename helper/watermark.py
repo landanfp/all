@@ -19,15 +19,13 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         "bottom_left": "20:main_h-text_h-20"
     }
 
-    # **حذف چک فونت و fontfile – استفاده از پیش‌فرض FFmpeg**
-    
     # استفاده از shlex.quote برای ایمن سازی متن
     safe_text = shlex.quote(text)
     
-    # **اصلاح: drawtext بدون fontfile (پیش‌فرض استفاده می‌شه)**
+    # **اصلاح: drawtext بدون fontfile و ft_quality (برای FFmpeg 7.x)**
     drawtext = (
         f"drawtext=text={safe_text}:fontcolor=white@0.8:"
-        f"fontsize=h*{size_percent}/100:ft_quality=3:shadowcolor=black@0.4:shadowx=2:shadowy=2:"
+        f"fontsize=h*{size_percent}/100:shadowcolor=black@0.4:shadowx=2:shadowy=2:"
         f"x={position_map[position].split(':')[0]}:y={position_map[position].split(':')[1]}"
     )
 
