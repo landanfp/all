@@ -4,9 +4,9 @@ import os
 import subprocess
 import shlex 
 
-# --- توجه مهم: مسیر فونت ---
-# برای نمایش صحیح متن (انگلیسی یا فارسی)، FFmpeg نیاز به یک فایل فونت معتبر دارد.
-# شما باید این مسیر را بر اساس محیط اجرای بات خود تنظیم کنید.
+# --- توجه مهم: مسیر فونت پیش‌فرض ---
+# این مسیر یک فونت استاندارد در بسیاری از محیط‌های لینوکس (مانند داکر یا Koyeb) است.
+# اگر بات شما در محیط دیگری اجرا می‌شود، ممکن است نیاز به نصب فونت یا تغییر این مسیر باشد.
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" 
 # ---
 
@@ -24,6 +24,10 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         "bottom_center": "(main_w-text_w)/2:main_h-text_h-20",
         "bottom_left": "20:main_h-text_h-20"
     }
+
+    # بررسی وجود فونت
+    if not os.path.exists(FONT_PATH):
+        raise FileNotFoundError(f"Font file not found at {FONT_PATH}. Please install the font or change FONT_PATH.")
 
     # استفاده از shlex.quote برای ایمن سازی متن
     safe_text = shlex.quote(text)
@@ -56,6 +60,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
              raise Exception(f"FFmpeg failed: {error_output[:200]}...")
 
     except FileNotFoundError:
+        # اگر خطا مربوط به خود دستور ffmpeg باشد (نه فونت)
         raise FileNotFoundError("FFmpeg command not found. Please install FFmpeg.")
     except Exception as e:
         raise Exception(f"Error during text watermark processing: {e}")
