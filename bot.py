@@ -42,9 +42,9 @@ app.add_handler(CallbackQueryHandler(set_position, filters.regex("^text_pos_")))
 app.add_handler(CallbackQueryHandler(set_size, filters.regex("^text_size_")))
 
 # جریان واترمارک تصویری
-# **فیکس: handler برای photo (قبلی) + handler جدید برای document (jpg/png)**
+# **فیکس: handler برای photo + handler برای document (بدون mime_type در filter)**
 app.add_handler(MessageHandler(handle_image_upload, filters.photo & filters.private))
-app.add_handler(MessageHandler(handle_image_upload, filters.document & (filters.mime_type("image/jpeg") | filters.mime_type("image/png")) & filters.private))
+app.add_handler(MessageHandler(handle_image_upload, filters.document & filters.private))  # همه documentها، mime داخل handler چک می‌شه
 app.add_handler(CallbackQueryHandler(set_image_position, filters.regex("^image_pos_")))
 app.add_handler(CallbackQueryHandler(set_image_size, filters.regex("^image_size_")))
 
