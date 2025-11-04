@@ -28,7 +28,7 @@ API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 app = Client("watermark_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 
 # ------------------------------------
-# ثبت هندلرها 
+# ثبت هندلرها (خطاهای مربوط به group=N اینجا اصلاح شد)
 # ------------------------------------
 
 # جریان شروع و انتخاب
@@ -46,9 +46,9 @@ app.add_handler(MessageHandler(handle_image_upload, filters.photo & filters.priv
 app.add_handler(CallbackQueryHandler(set_image_position, filters.regex("^image_pos_")))
 app.add_handler(CallbackQueryHandler(set_image_size, filters.regex("^image_size_")))
 
-# هندلرهای دریافت ویدیو: با استفاده از Group منطق اجرای صحیح تضمین می‌شود.
-app.add_handler(MessageHandler(handle_video, filters.video & filters.private, group=1)) # واترمارک متنی
-app.add_handler(MessageHandler(process_image_watermark, filters.video & filters.private, group=2)) # واترمارک تصویری
+# هندلرهای دریافت ویدیو: آرگومان 'group' به متد add_handler منتقل شد.
+app.add_handler(MessageHandler(handle_video, filters.video & filters.private), group=1) # واترمارک متنی
+app.add_handler(MessageHandler(process_image_watermark, filters.video & filters.private), group=2) # واترمارک تصویری
 
 
 print("Bot started. Press Ctrl+C to exit.")
