@@ -33,9 +33,8 @@ async def handle_image_upload(client, message: Message):
         await message.reply("❌ لطفا ابتدا گزینه '🖼️ واترمارک تصویری' را انتخاب کنید و مراحل را به ترتیب طی کنید. (/start)")
         return
 
+    # **فیکس: حذف file_name (Photo object نداره) – همیشه jpg فرض کن (تلگرام photo رو به jpg تبدیل می‌کنه)**
     file_extension = "jpg"
-    if message.photo.file_name and '.' in message.photo.file_name:
-         file_extension = message.photo.file_name.split('.')[-1].lower()
     
     temp_path = f"{message.photo.file_unique_id}_{user_id}.{file_extension}"
     try:
@@ -46,6 +45,7 @@ async def handle_image_upload(client, message: Message):
         await message.reply("❌ خطا در دانلود تصویر. لطفا دوباره امتحان کنید.")
         return
 
+    # **فیکس: چک فرمت بعد دانلود (Pyrogram photo رو به jpg دانلود می‌کنه، اما برای png اگر document باشه، بعداً handle کن)**
     if not image_file.lower().endswith((".jpg", ".png", ".jpeg")):
         await message.reply("لطفا فقط فایل با فرمت png، jpg یا jpeg ارسال کنید.")
         if os.path.exists(image_file):
