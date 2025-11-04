@@ -69,18 +69,20 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         "bottom_left": "20:main_h-overlay_h-20"
     }
 
-    # **فیکس: فیلتر overlay اول، بعد format=yuv420p جداگانه (برای syntax درست و autoplay تلگرام)**
+    # **فیکس نهایی: scale/setsar قبل overlay + format بعد + keyframe برای preview تلگرام**
     filter_complex = (
-        f"[1]scale=iw*{size_percent/100}:-1[wm];"
-        f"[0][wm]overlay={position_map[position]}[v];"
-        f"[v]format=yuv420p"
+        f"[0:v]scale=iw*sar:ih,setsar=1[v];"
+        f"[1:v]scale=iw*{size_percent/100}:-1[wm];"
+        f"[v][wm]overlay={position_map[position]}[ov];"
+        f"[ov]format=yuv420p"
     )
 
     cmd = (
-        f"ffmpeg -i \"{input_path}\" -i \"{image_path}\" "
+        f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
         f"-filter_complex \"{filter_complex}\" "
-        f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -vsync 1 "
-        f"-map 0:v:0 -map 0:a:0? -movflags +faststart \"{output_path}\" -y"
+        f"-c:v libx264 -preset ultrafast -crf 23 -pix_fmt yuv420p -vsync 1 "
+        f"-g 30 -keyint_min 1 -movflags +faststart "
+        f"-map 0:v:0 -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y"
     )
     
     # اجرای ایمن FFmpeg
