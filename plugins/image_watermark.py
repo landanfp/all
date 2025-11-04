@@ -51,7 +51,7 @@ async def set_image_position(client, query: CallbackQuery):
         await query.answer("لطفا مراحل را به ترتیب طی کنید.")
         return
 
-    position = query.data.split("_")[-1]
+    position = query.data.split("_", 2)[-1]  # فیکس: maxsplit=2 برای گرفتن کل 'top_right'
     set_state(user_id, "position", position)
     set_state(user_id, "step", "size")
 
