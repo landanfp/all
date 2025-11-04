@@ -23,20 +23,26 @@ async def ask_image(client, query: CallbackQuery):
     print(f"Debug: Set step to 'image_upload' for user {user_id}")  # لاگ set state
 
 async def handle_image_upload(client, message: Message):
-    """دریافت تصویر واترمارک و درخواست موقعیت."""
+    """دریافت تصویر واترمارک و درخواست موقعیت (پشتیبانی از photo و document)."""
     user_id = message.from_user.id
     current_step = get_state(user_id, "step")
-    print(f"Debug: Photo handler triggered for user {user_id}, current step: {current_step}")  # لاگ trigger
+    print(f"Debug: Image handler triggered for user {user_id}, current step: {current_step}, type: {'photo' if message.photo else 'document'}")  # لاگ trigger
     
     if current_step != "image_upload":
         print(f"Debug: Wrong step for user {user_id}, skipping.")  # لاگ skip
         await message.reply("❌ لطفا ابتدا گزینه '🖼️ واترمارک تصویری' را انتخاب کنید و مراحل را به ترتیب طی کنید. (/start)")
         return
 
-    # **فیکس: حذف file_name (Photo object نداره) – همیشه jpg فرض کن (تلگرام photo رو به jpg تبدیل می‌کنه)**
-    file_extension = "jpg"
+    # **فیکس: گرفتن file_name از photo (file_unique_id) یا document (file_name)**
+    file_name = None
+    if message.photo:
+        file_name = f"{message.photo.file_unique_id}.jpg"  # photo همیشه jpg
+    elif message.document:
+        file_name = message.document.file_name or f"{message.document.file_unique_id}.jpg"
     
-    temp_path = f"{message.photo.file_unique_id}_{user_id}.{file_extension}"
+    file_extension = file_name.split('.')[-1].lower() if file_name and '.' in file_name else "jpg"
+    
+    temp_path = f"{getattr(message.photo, 'file_unique_id', getattr(message.document, 'file_unique_id', 'unknown'))}_{user_id}.{file_extension}"
     try:
         image_file = await message.download(file_name=temp_path)
         print(f"Debug: Image downloaded to {image_file}")  # لاگ دانلود
@@ -45,7 +51,7 @@ async def handle_image_upload(client, message: Message):
         await message.reply("❌ خطا در دانلود تصویر. لطفا دوباره امتحان کنید.")
         return
 
-    # **فیکس: چک فرمت بعد دانلود (Pyrogram photo رو به jpg دانلود می‌کنه، اما برای png اگر document باشه، بعداً handle کن)**
+    # چک فرمت بعد دانلود
     if not image_file.lower().endswith((".jpg", ".png", ".jpeg")):
         await message.reply("لطفا فقط فایل با فرمت png، jpg یا jpeg ارسال کنید.")
         if os.path.exists(image_file):
