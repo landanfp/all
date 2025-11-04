@@ -21,7 +21,7 @@ from plugins.text_watermark import (
 from plugins.start import start_handler
 
 # توکن‌ها و شناسه‌ها (لطفاً این مقادیر را با مقادیر واقعی خود جایگزین کنید)
-BOT_TOKEN = '1396293494:AAFY7RXygNEZPFPXfmoJ66SljlXeCSilXG0'
+BOT_TOKEN = '5355055672:AAEE8OIOqLYxbnwesF3ki2sOsXr03Q90JiI'
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 
@@ -42,7 +42,9 @@ app.add_handler(CallbackQueryHandler(set_position, filters.regex("^text_pos_")))
 app.add_handler(CallbackQueryHandler(set_size, filters.regex("^text_size_")))
 
 # جریان واترمارک تصویری
+# **فیکس: handler برای photo (قبلی) + handler جدید برای document (jpg/png)**
 app.add_handler(MessageHandler(handle_image_upload, filters.photo & filters.private))
+app.add_handler(MessageHandler(handle_image_upload, filters.document & (filters.mime_type("image/jpeg") | filters.mime_type("image/png")) & filters.private))
 app.add_handler(CallbackQueryHandler(set_image_position, filters.regex("^image_pos_")))
 app.add_handler(CallbackQueryHandler(set_image_size, filters.regex("^image_size_")))
 
