@@ -17,16 +17,19 @@ sizes = [10, 15, 20, 25, 30, 35, 40, 45, 50]
 
 async def ask_image(client, query: CallbackQuery):
     """درخواست تصویر واترمارک."""
+    user_id = query.from_user.id
     await query.message.edit("لطفا تصویری برای واترمارک ارسال کنید (فقط jpg یا png):")
-    set_state(query.from_user.id, "step", "image_upload")
+    set_state(user_id, "step", "image_upload")
+    print(f"Debug: Set step to 'image_upload' for user {user_id}")  # لاگ set state
 
 async def handle_image_upload(client, message: Message):
     """دریافت تصویر واترمارک و درخواست موقعیت."""
     user_id = message.from_user.id
     current_step = get_state(user_id, "step")
-    print(f"Debug: User {user_id} uploaded image, current step: {current_step}")  # لاگ برای debug
+    print(f"Debug: Photo handler triggered for user {user_id}, current step: {current_step}")  # لاگ trigger
     
     if current_step != "image_upload":
+        print(f"Debug: Wrong step for user {user_id}, skipping.")  # لاگ skip
         await message.reply("❌ لطفا ابتدا گزینه '🖼️ واترمارک تصویری' را انتخاب کنید و مراحل را به ترتیب طی کنید. (/start)")
         return
 
@@ -39,7 +42,7 @@ async def handle_image_upload(client, message: Message):
         image_file = await message.download(file_name=temp_path)
         print(f"Debug: Image downloaded to {image_file}")  # لاگ دانلود
     except Exception as e:
-        print(f"Download Error: {e}")
+        print(f"Download Error for user {user_id}: {e}")
         await message.reply("❌ خطا در دانلود تصویر. لطفا دوباره امتحان کنید.")
         return
 
@@ -54,6 +57,7 @@ async def handle_image_upload(client, message: Message):
     
     buttons = [[InlineKeyboardButton(pos[1], callback_data=f"image_pos_{pos[0]}")] for pos in positions]
     await message.reply("موقعیت تصویر واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(buttons))
+    print(f"Debug: Image processed, set step to 'position' for user {user_id}")  # لاگ موفقیت
 
 async def set_image_position(client, query: CallbackQuery):
     """دریافت موقعیت و درخواست سایز."""
