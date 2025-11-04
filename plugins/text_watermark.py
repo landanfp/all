@@ -1,3 +1,4 @@
+# نام فایل: plugins/text_watermark.py (هندلرهای واترمارک متنی)
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from helper.state import set_state, get_state, clear_state
@@ -6,6 +7,7 @@ from helper.progress import progress_bar
 import os
 import time
 
+# لیست موقعیت‌ها و سایزها
 positions = [
     ("top_right", "بالا راست"),
     ("top_center", "بالا وسط"),
@@ -17,79 +19,112 @@ positions = [
     ("bottom_center", "پایین وسط"),
     ("bottom_left", "پایین چپ")
 ]
-
 sizes = [10, 15, 20, 25, 30, 35, 40, 45, 50]
 
-@Client.on_callback_query(filters.regex("text_wm"))
+
 async def ask_text(client, query: CallbackQuery):
+    """درخواست متن واترمارک."""
     await query.message.edit("لطفا متن واترمارک را ارسال کنید:")
     set_state(query.from_user.id, "step", "text_input")
 
-@Client.on_message(filters.text & filters.private)
 async def handle_text_input(client, message: Message):
-    if get_state(message.from_user.id, "step") == "text_input":
-        set_state(message.from_user.id, "text", message.text)
-        set_state(message.from_user.id, "step", "position")
+    """دریافت متن و درخواست موقعیت."""
+    user_id = message.from_user.id
+    if get_state(user_id, "step") == "text_input":
+        # فقط متن وارد شده توسط کاربر را ذخیره می‌کنیم.
+        if not message.text or len(message.text.strip()) == 0:
+            await message.reply("لطفا یک متن معتبر برای واترمارک ارسال کنید.")
+            return
+
+        set_state(user_id, "text", message.text.strip())
+        set_state(user_id, "step", "position")
+        
+        # ساخت دکمه‌ها
         buttons = [[InlineKeyboardButton(pos[1], callback_data=f"text_pos_{pos[0]}")] for pos in positions]
         await message.reply("موقعیت واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(buttons))
 
-@Client.on_callback_query(filters.regex("^text_pos_"))
 async def set_position(client, query: CallbackQuery):
+    """دریافت موقعیت و درخواست سایز."""
+    user_id = query.from_user.id
     position = query.data.split("_")[-1]
-    set_state(query.from_user.id, "position", position)
-    print(f"موقعیت انتخاب شده (متن): {position}")
-    set_state(query.from_user.id, "step", "size")
+
+    if get_state(user_id, "step") != "position":
+        await query.answer("لطفا مراحل را به ترتیب طی کنید.")
+        return
+
+    set_state(user_id, "position", position)
+    set_state(user_id, "step", "size")
+    
     size_buttons = [
         [InlineKeyboardButton(f"{s}%", callback_data=f"text_size_{s}") for s in sizes[i:i+5]]
         for i in range(0, len(sizes), 5)
     ]
     await query.message.edit("سایز واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(size_buttons))
 
-@Client.on_callback_query(filters.regex("^text_size_"))
 async def set_size(client, query: CallbackQuery):
-    size = int(query.data.split("_")[-1])
-    set_state(query.from_user.id, "size", size)
-    set_state(query.from_user.id, "step", "ready")
-    await query.message.edit("همه‌چیز آماده‌ست! حالا ویدیوی موردنظر را ارسال کن:")
-
-@Client.on_message(filters.video & filters.private)
-async def handle_video(client, message: Message):
-    if get_state(message.from_user.id, "step") != "ready":
+    """دریافت سایز و آماده‌سازی برای ویدیو."""
+    user_id = query.from_user.id
+    if get_state(user_id, "step") != "size":
+        await query.answer("لطفا مراحل را به ترتیب طی کنید.")
         return
 
-    text = get_state(message.from_user.id, "text")
-    position = get_state(message.from_user.id, "position")
-    size = get_state(message.from_user.id, "size")
+    size = int(query.data.split("_")[-1])
+    set_state(user_id, "size", size)
+    set_state(user_id, "step", "ready")
+    await query.message.edit("✅ همه‌چیز آماده‌ست! حالا ویدیوی موردنظر را ارسال کن تا واترمارک متنی اضافه شود.")
 
-    msg = await message.reply("در حال دانلود ویدیو...")
+async def handle_video(client, message: Message):
+    """دریافت ویدیو، پردازش و ارسال خروجی."""
+    user_id = message.from_user.id
 
-    input_file = f"{message.video.file_unique_id}.mp4"
-    output_file = f"wm_{input_file}"
+    if get_state(user_id, "step") != "ready":
+        return
+
+    text = get_state(user_id, "text")
+    position = get_state(user_id, "position")
+    size = get_state(user_id, "size")
+    
+    if not text:
+        await message.reply("❌ واترمارک متنی پیدا نشد. لطفا برای تنظیم مجدد، /start را ارسال کنید.")
+        clear_state(user_id)
+        return
+
+    msg = await message.reply("⏳ در حال دانلود ویدیو...")
+
+    input_file = f"{message.video.file_id}_{user_id}.mp4"
+    output_file = f"wm_{message.video.file_id}_{user_id}.mp4"
     start = time.time()
+    
+    try:
+        # مرحله دانلود 
+        await message.download(file_name=input_file, progress=progress_bar, progress_args=(msg, start, "دانلود"))
 
-    await message.download(file_name=input_file, progress=progress_bar, progress_args=(msg, start))
+        # مرحله افزودن واترمارک
+        await msg.edit("⚙️ در حال افزودن واترمارک...")
+        await add_text_watermark(input_file, output_file, text, position, size)
+        
+        if not os.path.exists(output_file):
+             await msg.edit("❌ عملیات واترمارک‌گذاری ناموفق بود. (خطای FFmpeg)")
+             return
 
-    await msg.edit("در حال افزودن واترمارک...")
-    await add_text_watermark(input_file, output_file, text, position, size)
+        # مرحله آپلود
+        await msg.edit("⬆️ در حال آپلود فایل...")
+        await message.reply_video(
+            output_file, 
+            caption=f"ویدیوی واترمارک‌خورده شما با متن: {text}",
+            progress=progress_bar,
+            progress_args=(msg, start, "آپلود"),
+            supports_streaming=True
+        )
 
-    await msg.edit("آپلود فایل...")
-    await message.reply_video(output_file, caption="ویدیوی واترمارک‌خورده آماده شد!")
+    except Exception as e:
+        print(f"Text Watermark Error: {e}")
+        await msg.edit(f"❌ یک خطا رخ داد: {e}")
 
-    # بررسی وجود فایل خروجی (اضافه شده برای دیباگ)
-    if not os.path.exists(output_file):
-        print(f"فایل خروجی وجود ندارد: {output_file}")
-    else:
-        print(f"فایل خروجی وجود دارد: {output_file}")
-        # تلاش برای دانلود فایل خروجی (اضافه شده برای دیباگ)
-        try:
-            await client.download_media(output_file, file_name="downloaded_output.mp4")
-            print(f"فایل خروجی در downloaded_output.mp4 دانلود شد.")
-        except Exception as e:
-            print(f"خطا در دانلود فایل خروجی: {e}")
-
-    # حذف فایل‌ها بعد از (تلاش برای) ارسال و دیباگ
-    os.remove(input_file)
-    if os.path.exists(output_file):
-        os.remove(output_file)
-    clear_state(message.from_user.id)
-    await msg.delete()
+    finally:
+        await msg.delete()
+        if os.path.exists(input_file):
+            os.remove(input_file)
+        if os.path.exists(output_file):
+            os.remove(output_file)
+        clear_state(user_id)
