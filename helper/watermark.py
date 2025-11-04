@@ -4,12 +4,6 @@ import os
 import subprocess
 import shlex 
 
-# --- توجه مهم: مسیر فونت پیش‌فرض ---
-# این مسیر یک فونت استاندارد در بسیاری از محیط‌های لینوکس است.
-# اگر بات شما در محیط دیگری اجرا می‌شود، ممکن است نیاز به نصب فونت یا تغییر این مسیر باشد.
-FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" 
-# ---
-
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
     """افزودن واترمارک متنی به ویدیو با استفاده از FFmpeg."""
     position_map = {
@@ -25,16 +19,14 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         "bottom_left": "20:main_h-text_h-20"
     }
 
-    # بررسی وجود فونت
-    if not os.path.exists(FONT_PATH):
-        raise FileNotFoundError(f"Font file not found at {FONT_PATH}. Please install the font or change FONT_PATH.")
-
+    # **حذف چک فونت و fontfile – استفاده از پیش‌فرض FFmpeg**
+    
     # استفاده از shlex.quote برای ایمن سازی متن
     safe_text = shlex.quote(text)
     
-    # **اصلاح: حذف bidi=auto برای رفع خطای "Option not found"**
+    # **اصلاح: drawtext بدون fontfile (پیش‌فرض استفاده می‌شه)**
     drawtext = (
-        f"drawtext=text={safe_text}:fontfile='{FONT_PATH}':fontcolor=white@0.8:"
+        f"drawtext=text={safe_text}:fontcolor=white@0.8:"
         f"fontsize=h*{size_percent}/100:ft_quality=3:shadowcolor=black@0.4:shadowx=2:shadowy=2:"
         f"x={position_map[position].split(':')[0]}:y={position_map[position].split(':')[1]}"
     )
