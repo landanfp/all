@@ -69,10 +69,11 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         "bottom_left": "20:main_h-overlay_h-20"
     }
 
-    # فیلتر برای مقیاس‌بندی تصویر و اعمال واترمارک + **فیکس: format=yuv420p و vsync برای تلگرام autoplay**
+    # **فیکس: فیلتر overlay اول، بعد format=yuv420p جداگانه (برای syntax درست و autoplay تلگرام)**
     filter_complex = (
         f"[1]scale=iw*{size_percent/100}:-1[wm];"
-        f"[0][wm]overlay={position_map[position]}:format=yuv420p,setsar=1:1"
+        f"[0][wm]overlay={position_map[position]}[v];"
+        f"[v]format=yuv420p"
     )
 
     cmd = (
