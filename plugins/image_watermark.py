@@ -26,7 +26,6 @@ async def handle_image_upload(client, message: Message):
     if get_state(user_id, "step") != "image_upload":
         return
 
-    # برای جلوگیری از خطای AttributeError اگر فایل نام نداشته باشد.
     file_extension = "jpg"
     if message.photo.file_name and '.' in message.photo.file_name:
          file_extension = message.photo.file_name.split('.')[-1].lower()
@@ -87,47 +86,50 @@ async def process_image_watermark(client, message: Message):
 
     if not image or not os.path.exists(image):
         await message.reply("❌ مسیر تصویر واترمارک پیدا نشد. لطفا دوباره شروع کنید.")
-        # تصویر قبلی (اگر وجود داشت) حذف می‌شود
         if image and os.path.exists(image): os.remove(image)
         clear_state(user_id)
         return
 
     msg = await message.reply("⏳ در حال دانلود ویدیو...")
 
-    input_file = f"{message.video.file_id}_{user_id}.mp4"
+    input_path_placeholder = f"{message.video.file_id}_{user_id}.mp4"
     output_file = f"imgwm_{message.video.file_id}_{user_id}.mp4"
     start = time.time()
+    input_path = None # مسیر واقعی دانلود شده
 
     try:
-        # مرحله دانلود
-        await message.download(file_name=input_file, progress=progress_bar, progress_args=(msg, start, "دانلود"))
+        # **اصلاح ۱: گرفتن مسیر واقعی فایل دانلود شده**
+        input_path = await message.download(file_name=input_path_placeholder, progress=progress_bar, progress_args=(msg, start, "دانلود"))
 
         # مرحله افزودن واترمارک
         await msg.edit("⚙️ در حال افزودن تصویر واترمارک...")
-        await add_image_watermark(input_file, output_file, image, position, size)
+        await add_image_watermark(input_path, output_file, image, position, size)
 
         if not os.path.exists(output_file):
-             await msg.edit("❌ عملیات واترمارک‌گذاری ناموفق بود. (خطای FFmpeg)")
-             return
+             raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فایل یا کدک)")
 
         # مرحله آپلود
         await msg.edit("⬆️ در حال آپلود فایل نهایی...")
         await message.reply_video(
             output_file, 
             caption="ویدیوی نهایی با واترمارک تصویری آماده شد!",
-            progress=progress_bar, 
+            progress=progress_bar,
             progress_args=(msg, start, "آپلود"),
             supports_streaming=True
         )
+        
+        # **اصلاح ۲: حذف پیام پیشرفت در صورت موفقیت**
+        await msg.delete()
 
     except Exception as e:
         print(f"Image Watermark Error: {e}")
+        # در صورت خطا، پیام را ویرایش می‌کنیم و آن را حذف نمی‌کنیم.
         await msg.edit(f"❌ یک خطا رخ داد: {e}")
 
     finally:
-        # حذف فایل‌ها و پاکسازی وضعیت
-        await msg.delete()
-        if os.path.exists(input_file): os.remove(input_file)
+        # **اصلاح ۳: حذف msg.delete() و فقط پاکسازی فایل‌ها**
+        # پاکسازی فایل‌ها با استفاده از مسیر واقعی
+        if input_path and os.path.exists(input_path): os.remove(input_path)
         if os.path.exists(output_file): os.remove(output_file)
         if os.path.exists(image): os.remove(image) # حذف تصویر واترمارک
         clear_state(user_id)
