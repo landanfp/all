@@ -31,7 +31,7 @@ async def handle_text_input(client, message: Message):
     """دریافت متن و درخواست موقعیت."""
     user_id = message.from_user.id
     if get_state(user_id, "step") == "text_input":
-        # فقط متن وارد شده توسط کاربر را ذخیره می‌کنیم.
+        
         if not message.text or len(message.text.strip()) == 0:
             await message.reply("لطفا یک متن معتبر برای واترمارک ارسال کنید.")
             return
@@ -91,40 +91,47 @@ async def handle_video(client, message: Message):
 
     msg = await message.reply("⏳ در حال دانلود ویدیو...")
 
-    input_file = f"{message.video.file_id}_{user_id}.mp4"
+    # استفاده از یک نام محلی برای دانلود
+    input_path_placeholder = f"{message.video.file_id}_{user_id}.mp4"
     output_file = f"wm_{message.video.file_id}_{user_id}.mp4"
     start = time.time()
+    input_path = None # مسیر واقعی دانلود شده
     
     try:
-        # مرحله دانلود 
-        await message.download(file_name=input_file, progress=progress_bar, progress_args=(msg, start, "دانلود"))
+        # **اصلاح ۱: گرفتن مسیر واقعی فایل دانلود شده**
+        input_path = await message.download(file_name=input_path_placeholder, progress=progress_bar, progress_args=(msg, start, "دانلود"))
 
         # مرحله افزودن واترمارک
         await msg.edit("⚙️ در حال افزودن واترمارک...")
-        await add_text_watermark(input_file, output_file, text, position, size)
+        await add_text_watermark(input_path, output_file, text, position, size) # استفاده از مسیر واقعی
         
         if not os.path.exists(output_file):
-             await msg.edit("❌ عملیات واترمارک‌گذاری ناموفق بود. (خطای FFmpeg)")
-             return
+             # اگر FFmpeg شکست خورد، باید یک Exception را Raise کنیم تا به بلوک except برود
+             raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فونت یا کدک)")
 
-        # مرحله آپلود
+        # مرحله آپلود 
         await msg.edit("⬆️ در حال آپلود فایل...")
         await message.reply_video(
             output_file, 
             caption=f"ویدیوی واترمارک‌خورده شما با متن: {text}",
-            progress=progress_bar,
+            progress=progress_bar, 
             progress_args=(msg, start, "آپلود"),
             supports_streaming=True
         )
+        
+        # **اصلاح ۲: حذف پیام پیشرفت در صورت موفقیت**
+        await msg.delete()
 
     except Exception as e:
         print(f"Text Watermark Error: {e}")
+        # در صورت خطا، پیام را ویرایش می‌کنیم و آن را حذف نمی‌کنیم.
         await msg.edit(f"❌ یک خطا رخ داد: {e}")
 
     finally:
-        await msg.delete()
-        if os.path.exists(input_file):
-            os.remove(input_file)
+        # **اصلاح ۳: حذف msg.delete() و فقط پاکسازی فایل‌ها**
+        # پاکسازی فایل‌ها با استفاده از مسیر واقعی
+        if input_path and os.path.exists(input_path):
+            os.remove(input_path)
         if os.path.exists(output_file):
             os.remove(output_file)
         clear_state(user_id)
