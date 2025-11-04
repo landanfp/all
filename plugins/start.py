@@ -1,12 +1,13 @@
+# نام فایل: plugins/start.py (هندلر /start)
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-@Client.on_message(filters.command("start"))
 async def start_handler(client, message: Message):
+    """هندلر دستور /start."""
     await message.reply(
-        "سلام! یکی از گزینه‌های واترمارک را انتخاب کن:",
+        "👋 سلام! من یک ربات برای افزودن واترمارک متنی یا تصویری به ویدیوها هستم.\nیکی از گزینه‌های زیر را انتخاب کن تا شروع کنیم:",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("واترمارک متنی", callback_data="text_wm")],
-            [InlineKeyboardButton("واترمارک تصویری", callback_data="image_wm")]
+            [InlineKeyboardButton("🖋️ واترمارک متنی", callback_data="text_wm")],
+            [InlineKeyboardButton("🖼️ واترمارک تصویری", callback_data="image_wm")]
         ])
     )
