@@ -5,7 +5,7 @@ import subprocess
 import shlex 
 
 # --- توجه مهم: مسیر فونت پیش‌فرض ---
-# این مسیر یک فونت استاندارد در بسیاری از محیط‌های لینوکس (مانند داکر یا Koyeb) است.
+# این مسیر یک فونت استاندارد در بسیاری از محیط‌های لینوکس است.
 # اگر بات شما در محیط دیگری اجرا می‌شود، ممکن است نیاز به نصب فونت یا تغییر این مسیر باشد.
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" 
 # ---
@@ -32,9 +32,9 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     # استفاده از shlex.quote برای ایمن سازی متن
     safe_text = shlex.quote(text)
     
-    # استفاده از text ورودی (رفع مشکل واترمارک ثابت)
+    # **اصلاح: حذف bidi=auto برای رفع خطای "Option not found"**
     drawtext = (
-        f"drawtext=text={safe_text}:fontfile='{FONT_PATH}':fontcolor=white@0.8:bidi=auto:"
+        f"drawtext=text={safe_text}:fontfile='{FONT_PATH}':fontcolor=white@0.8:"
         f"fontsize=h*{size_percent}/100:ft_quality=3:shadowcolor=black@0.4:shadowx=2:shadowy=2:"
         f"x={position_map[position].split(':')[0]}:y={position_map[position].split(':')[1]}"
     )
@@ -45,7 +45,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
     )
     
-    # اجرای ایمن FFmpeg با shlex.split (رفع مشکل پایداری)
+    # اجرای ایمن FFmpeg با shlex.split
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
