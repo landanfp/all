@@ -23,7 +23,11 @@ async def ask_image(client, query: CallbackQuery):
 async def handle_image_upload(client, message: Message):
     """دریافت تصویر واترمارک و درخواست موقعیت."""
     user_id = message.from_user.id
-    if get_state(user_id, "step") != "image_upload":
+    current_step = get_state(user_id, "step")
+    print(f"Debug: User {user_id} uploaded image, current step: {current_step}")  # لاگ برای debug
+    
+    if current_step != "image_upload":
+        await message.reply("❌ لطفا ابتدا گزینه '🖼️ واترمارک تصویری' را انتخاب کنید و مراحل را به ترتیب طی کنید. (/start)")
         return
 
     file_extension = "jpg"
@@ -31,11 +35,18 @@ async def handle_image_upload(client, message: Message):
          file_extension = message.photo.file_name.split('.')[-1].lower()
     
     temp_path = f"{message.photo.file_unique_id}_{user_id}.{file_extension}"
-    image_file = await message.download(file_name=temp_path)
+    try:
+        image_file = await message.download(file_name=temp_path)
+        print(f"Debug: Image downloaded to {image_file}")  # لاگ دانلود
+    except Exception as e:
+        print(f"Download Error: {e}")
+        await message.reply("❌ خطا در دانلود تصویر. لطفا دوباره امتحان کنید.")
+        return
 
     if not image_file.lower().endswith((".jpg", ".png", ".jpeg")):
         await message.reply("لطفا فقط فایل با فرمت png، jpg یا jpeg ارسال کنید.")
-        os.remove(image_file)
+        if os.path.exists(image_file):
+            os.remove(image_file)
         return
 
     set_state(user_id, "image_path", image_file)
