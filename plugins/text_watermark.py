@@ -39,8 +39,11 @@ async def handle_text_input(client, message: Message):
         set_state(user_id, "text", message.text.strip())
         set_state(user_id, "step", "position")
         
-        # ساخت دکمه‌ها
-        buttons = [[InlineKeyboardButton(pos[1], callback_data=f"text_pos_{pos[0]}")] for pos in positions]
+        # ساخت دکمه‌ها: هر ردیف 3 دکمه، ترتیب از راست به چپ (با توجه به RTL تلگرام)
+        buttons = [
+            [InlineKeyboardButton(pos[1], callback_data=f"text_pos_{pos[0]}") for pos in positions[i:i+3]]
+            for i in range(0, len(positions), 3)
+        ]
         await message.reply("موقعیت واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(buttons))
 
 async def set_position(client, query: CallbackQuery):
