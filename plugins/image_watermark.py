@@ -70,7 +70,13 @@ async def handle_image_upload(client, message: Message):
     set_state(user_id, "image_path", image_file)
     set_state(user_id, "step", "position")
     
-    buttons = [[InlineKeyboardButton(pos[1], callback_data=f"image_pos_{pos[0]}")] for pos in positions]
+    # ساخت دکمه‌ها: هر ردیف 3 دکمه، ترتیب معکوس برای سازگاری با RTL تلگرام
+    buttons = []
+    for i in range(0, len(positions), 3):
+        row_positions = positions[i:i+3]
+        # معکوس کردن ترتیب دکمه‌ها برای نمایش درست از راست به چپ
+        buttons_row = [InlineKeyboardButton(pos[1], callback_data=f"image_pos_{pos[0]}") for pos in reversed(row_positions)]
+        buttons.append(buttons_row)
     await message.reply("موقعیت تصویر واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(buttons))
     print(f"Debug: Image processed, set step to 'position' for user {user_id}")  # لاگ موفقیت
 
