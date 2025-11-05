@@ -4,7 +4,7 @@ import os
 import subprocess
 import shlex
 
-# FONT_PATH حذف شد تا از فونت پیش‌فرض FFmpeg استفاده شود.
+# متغیر FONT_PATH و بررسی آن حذف شدند تا از فونت پیش‌فرض FFmpeg استفاده شود.
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
     """افزودن واترمارک متنی به ویدیو با استفاده از FFmpeg (نسخه متعادل - با فونت پیش‌فرض)."""
@@ -24,12 +24,11 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     # استفاده از shlex.quote برای ایمن سازی متن
     safe_text = shlex.quote(text)
     
-    # تغییر اعمال شده: fontfile حذف شد.
+    # ft_quality حذف شد و fontfile وجود ندارد.
     drawtext = (
         f"drawtext=text={safe_text}:fontcolor=white@0.8:"
         f"fontsize=h*{size_percent}/100:shadowcolor=black@0.4:shadowx=2:shadowy=2:"
-        f"x={position_map[position].split(':')[0]}:y={position_map[position].split(':')[1]}:"
-        f"ft_quality=high"
+        f"x={position_map[position].split(':')[0]}:y={position_map[position].split(':')[1]}" 
     )
 
     # تنظیمات متعادل: preset veryfast و crf 23
@@ -41,7 +40,6 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     
     # اجرای ایمن FFmpeg با shlex.split
     try:
-        # بلاک بررسی وجود فونت حذف شد.
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
             stdout=subprocess.PIPE, 
@@ -52,7 +50,8 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         if process.returncode != 0:
             error_output = stderr.decode()
             print(f"FFmpeg Error (Text): {error_output}")
-            raise Exception(f"FFmpeg failed: {error_output[:200]}...")
+            # حذف محدودیت [:200] برای تشخیص کامل خطا
+            raise Exception(f"FFmpeg failed: {error_output}") 
 
     except FileNotFoundError as e:
         if "ffmpeg" in str(e):
