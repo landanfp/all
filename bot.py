@@ -3,7 +3,7 @@ from fastapi import FastAPI
 import uvicorn
 import threading
 import asyncio
-from pyrogram import Client, filters, idle
+from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 
 # ایمپورت توابع از پلاگین‌ها
@@ -50,16 +50,21 @@ api = FastAPI()
 def root():
     return {"status": "ok", "message": "Bot is running"}
 
-# ✅ اجرای Pyrogram به روش امن در ترد جداگانه
+# ✅ اجرای Pyrogram بدون signal error
 def run_pyrogram():
-    print("Starting Pyrogram bot...")
     asyncio.run(start_bot())
 
 async def start_bot():
+    print("Starting Pyrogram bot...")
     await bot.start()
     print("Bot started successfully ✅")
-    await idle()  # منتظر می‌ماند تا برنامه بسته شود
+
+    # استفاده از Event به جای idle()
+    stop_event = asyncio.Event()
+    await stop_event.wait()
+
     await bot.stop()
+    print("Bot stopped ❌")
 
 # ✅ اجرای FastAPI (پورت 8000 برای health check)
 def run_fastapi():
