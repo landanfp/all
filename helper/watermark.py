@@ -81,24 +81,25 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         "bottom_left": "20:main_h-overlay_h-20"
     }
 
-    # فیکس فرمت (از قبل اعمال شده)
+    # **اصلاح مهم: برچسب‌گذاری صریح خروجی نهایی فیلتر**
+    # [ov]format=yuv420p  <-- این باید یک برچسب خروجی بگیرد، مثلا [outv]
     filter_complex = (
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva420p[wm];" 
         f"[v][wm]overlay={position_map[position]}[ov];"
-        f"[ov]format=yuv420p"
+        f"[ov]format=yuv420p[outv]" # <-- اصلاح شد: برچسب نهایی [outv] اضافه شد
     )
 
-    # **فیکس نهایی سازگاری با تلگرام:**
-    # 1. -profile:v high -level:v 4.0 (اجبار به استانداردترین پارامترهای H.264)
-    # 2. -map [ov] (نقشه‌برداری صریح خروجی فیلتر)
+    # **فیکس نهایی سازگاری با تلگرام و ارور:**
+    # 1. -map [outv] (نقشه‌برداری صریح جریان ویدیویی برچسب‌گذاری شده)
+    # 2. -profile:v high -level:v 4.0 (پارامترهای استاندارد H.264)
     cmd = (
         f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
         f"-filter_complex \"{filter_complex}\" "
         f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -vsync 1 "
-        f"-profile:v high -level:v 4.0 " # اضافه شده
+        f"-profile:v high -level:v 4.0 " 
         f"-g 30 -keyint_min 1 -movflags +faststart "
-        f"-map [ov] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" # تغییر map
+        f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" # <-- اصلاح شد: [ov] به [outv] تغییر کرد
     )
     
     # اجرای ایمن FFmpeg
