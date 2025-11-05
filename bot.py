@@ -45,6 +45,25 @@ API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 
 app = Client("watermark_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    """پاسخ دهنده ساده به درخواست‌های HTTP برای بررسی سلامت."""
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b"Bot is alive and running!")
+
+def run_health_server():
+    """شروع سرور HTTP در پورت 8000."""
+    server_address = ('0.0.0.0', 8000)
+    try:
+        httpd = HTTPServer(server_address, HealthCheckHandler)
+        print("✅ Health Check Server started on port 8000.")
+        httpd.serve_forever()
+    except Exception as e:
+        print(f"❌ Failed to start Health Check Server: {e}")
+
+
 #جریان شروع و انتخاب
 
 app.add_handler(MessageHandler(start_handler, filters.command("start")))
@@ -76,6 +95,11 @@ app.add_handler(MessageHandler(handle_video, filters.video & filters.private), g
 
 app.add_handler(MessageHandler(process_image_watermark, filters.video & filters.private), group=2) # واترمارک تصویری
 
+if __name__ == "__main__":
+    # 1. سرور Health Check را در یک Thread جداگانه شروع می‌کنیم.
+    health_thread = threading.Thread(target=run_health_server)
+    health_thread.daemon = True
+    health_thread.start()
 print("Bot started. Press Ctrl+C to exit.")
 
 app.run()
