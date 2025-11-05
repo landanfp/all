@@ -42,7 +42,7 @@ from plugins.start import start_handler
 
 
 # توکن‌ها و شناسه‌ها (لطفاً این مقادیر را با مقادیر واقعی خود جایگزین کنید)
-BOT_TOKEN = '5355055672:AAEE8OIOqLYxbnwesF3ki2sOsXr03Q90JiI'
+BOT_TOKEN = '1396293494:AAFY7RXygNEZPFPXfmoJ66SljlXeCSilXG0'
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 
