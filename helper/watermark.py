@@ -6,7 +6,7 @@ import shlex
 
 # مسیر فونت را تعریف می‌کنیم (فرض می‌کنیم در پوشه fonts کنار bot.py است)
 # **نکته مهم: مطمئن شو این فایل وجود دارد!**
-FONT_PATH = "fonts/font.ttf"
+#FONT_PATH = "fonts/font.ttf"
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
     """افزودن واترمارک متنی به ویدیو با استفاده از FFmpeg (نسخه متعادل)."""
@@ -28,7 +28,8 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     
     # استفاده از فونت مشخص برای پایداری
     drawtext = (
-        f"drawtext=text={safe_text}:fontfile={FONT_PATH}:fontcolor=white@0.8:"
+        #f"drawtext=text={safe_text}:fontfile={FONT_PATH}:fontcolor=white@0.8:"
+        f"drawtext=text={safe_text}:fontcolor=white@0.8:"
         f"fontsize=h*{size_percent}/100:shadowcolor=black@0.4:shadowx=2:shadowy=2:"
         f"x={position_map[position].split(':')[0]}:y={position_map[position].split(':')[1]}:"
         f"ft_quality=high"
