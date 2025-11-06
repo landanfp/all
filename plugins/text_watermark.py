@@ -7,7 +7,7 @@ from helper.progress import progress_bar
 import os
 import time
 
-# لیست موقعیت‌ها و سایزها
+# لیست موقعیت‌ها
 positions = [
     ("top_right", "بالا راست"),
     ("top_center", "بالا وسط"),
@@ -19,7 +19,7 @@ positions = [
     ("bottom_center", "پایین وسط"),
     ("bottom_left", "پایین چپ")
 ]
-sizes = [10, 15, 20, 25, 30, 35, 40, 45, 50]
+# (لیست سایزها از اینجا حذف شد و به تابع set_position منتقل شد)
 
 
 async def ask_text(client, query: CallbackQuery):
@@ -50,9 +50,9 @@ async def handle_text_input(client, message: Message):
         await message.reply("موقعیت واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(buttons))
 
 async def set_position(client, query: CallbackQuery):
-    """دریافت موقعیت و درخواست سایز."""
+    """دریافت موقعیت و درخواست سایز. (کد اصلاح شده طبق درخواست شما)"""
     user_id = query.from_user.id
-    position = query.data.split("_", 2)[-1]  # فیکس: maxsplit=2 برای گرفتن کل 'top_right'
+    position = query.data.split("_", 2)[-1]  # فیکس: maxsplit=2
 
     if get_state(user_id, "step") != "position":
         await query.answer("لطفا مراحل را به ترتیب طی کنید.")
@@ -61,10 +61,22 @@ async def set_position(client, query: CallbackQuery):
     set_state(user_id, "position", position)
     set_state(user_id, "step", "size")
     
+    # **** تغییر کلیدی: ساخت دکمه‌ها به صورت دستی طبق چیدمان درخواستی (چپ به راست) ****
     size_buttons = [
-        [InlineKeyboardButton(f"{s}%", callback_data=f"text_size_{s}") for s in sizes[i:i+5]]
-        for i in range(0, len(sizes), 5)
+        # ردیف اول: 5% 10% 15%
+        [
+            InlineKeyboardButton("5%", callback_data="text_size_5"),
+            InlineKeyboardButton("10%", callback_data="text_size_10"),
+            InlineKeyboardButton("15%", callback_data="text_size_15")
+        ],
+        # ردیف دوم: 15% 20% 30%
+        [
+            InlineKeyboardButton("15%", callback_data="text_size_15"),
+            InlineKeyboardButton("20%", callback_data="text_size_20"),
+            InlineKeyboardButton("30%", callback_data="text_size_30")
+        ]
     ]
+    
     await query.message.edit("سایز واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(size_buttons))
 
 async def set_size(client, query: CallbackQuery):
@@ -80,7 +92,7 @@ async def set_size(client, query: CallbackQuery):
     await query.message.edit("✅ همه‌چیز آماده‌ست! حالا ویدیوی موردنظر را ارسال کن تا واترمارک متنی اضافه شود.")
 
 async def handle_video(client, message: Message):
-    """دریافت ویدیو، پردازش و ارسال خروجی."""
+    """دریافت ویدیو، پردازش و ارسال خروجی. (کد اصلاح شده با نوار پیشرفت)"""
     user_id = message.from_user.id
 
     if get_state(user_id, "step") != "ready":
@@ -107,13 +119,12 @@ async def handle_video(client, message: Message):
         # **اصلاح ۱: گرفتن مسیر واقعی فایل دانلود شده**
         input_path = await message.download(file_name=input_path_placeholder, progress=progress_bar, progress_args=(msg, start, "دانلود"))
 
-        # مرحله افزودن واترمارک
-        await msg.edit("⚙️ در حال افزودن واترمارک...")
-        await add_text_watermark(input_path, output_file, text, position, size) # استفاده از مسیر واقعی
+        # مرحله افزودن واترمارک (پیام قبلی "در حال افزودن واترمارک" حذف شد)
+        # **** تغییر کلیدی: پاس دادن msg ****
+        await add_text_watermark(input_path, output_file, text, position, size, msg) # استفاده از مسیر واقعی
         
         if not os.path.exists(output_file):
-             # اگر FFmpeg شکست خورد، باید یک Exception را Raise کنیم تا به بلوک except برود
-             raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فونت یا کدک)")
+            raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فونت یا کدک)")
 
         # مرحله آپلود 
         await msg.edit("⬆️ در حال آپلود فایل...")
