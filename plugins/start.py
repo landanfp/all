@@ -1,4 +1,4 @@
-# نام فایل: plugins/start.py (هندلر /start)
+# نام فایل: plugins/start.py (هندلر  /start)
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
