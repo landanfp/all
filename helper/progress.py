@@ -26,8 +26,10 @@ async def progress_bar(current, total, message: Message, start, stage="در حا
         f"⏱️ زمان تخمینی: **{int(eta)}s**"
     )
 
-    # جلوگیری از Flood Wait: تنها اگر 5 ثانیه از آخرین ویرایش گذشته باشد یا درصد کامل شده باشد
-    if int(diff) % 5 == 0 or percentage == 100 or percentage == 0:
+    # **** تغییر کلیدی برای افزایش سرعت: ****
+    # جلوگیری از Flood Wait: آپدیت هر 8 ثانیه یکبار (به جای 5 ثانیه)
+    # این کار تعداد وقفه‌ها برای ادیت پیام را کاهش داده و سرعت انتقال را "کمی" افزایش می‌دهد
+    if int(diff) % 8 == 0 or percentage == 100 or percentage == 0:
         try:
             await message.edit(progress_text)
         except Exception:
