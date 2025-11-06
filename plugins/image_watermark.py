@@ -13,7 +13,7 @@ positions = [
     ("bottom_right", "پایین راست"), ("bottom_center", "پایین وسط"), ("bottom_left", "پایین چپ")
 ]
 
-sizes = [10, 15, 20, 25, 30, 35, 40, 45, 50]
+# (لیست سایزها از اینجا حذف شد و به تابع set_image_position منتقل شد)
 
 async def ask_image(client, query: CallbackQuery):
     """درخواست تصویر واترمارک."""
@@ -81,20 +81,25 @@ async def handle_image_upload(client, message: Message):
     print(f"Debug: Image processed, set step to 'position' for user {user_id}")  # لاگ موفقیت
 
 async def set_image_position(client, query: CallbackQuery):
-    """دریافت موقعیت و درخواست سایز."""
+    """دریافت موقعیت و درخواست سایز. (کد اصلاح شده طبق درخواست شما)"""
     user_id = query.from_user.id
     if get_state(user_id, "step") != "position":
         await query.answer("لطفا مراحل را به ترتیب طی کنید.")
         return
 
-    position = query.data.split("_", 2)[-1]  # فیکس: maxsplit=2 برای گرفتن کل 'top_right'
+    position = query.data.split("_", 2)[-1]  # فیکس: maxsplit=2
     set_state(user_id, "position", position)
     set_state(user_id, "step", "size")
 
+    # **** تغییر ۱: اضافه کردن 5 به لیست سایزها ****
+    sizes = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+
+    # **** تغییر ۲: اطمینان از چیدمان ۵تایی (چپ به راست) ****
     size_buttons = [
         [InlineKeyboardButton(f"{s}%", callback_data=f"image_size_{s}") for s in sizes[i:i+5]]
         for i in range(0, len(sizes), 5)
     ]
+    
     await query.message.edit("سایز تصویر واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(size_buttons))
 
 async def set_image_size(client, query: CallbackQuery):
@@ -110,7 +115,7 @@ async def set_image_size(client, query: CallbackQuery):
     await query.message.edit("✅ همه‌چیز آماده‌ست! حالا ویدیوی موردنظر برای افزودن تصویر را ارسال کنید:")
 
 async def process_image_watermark(client, message: Message):
-    """دریافت ویدیو، پردازش و ارسال خروجی (واترمارک تصویری)."""
+    """دریافت ویدیو، پردازش و ارسال خروجی (واترمارک تصویری). (کد اصلاح شده با نوار پیشرفت)"""
     user_id = message.from_user.id
 
     if get_state(user_id, "step") != "ready_img":
@@ -137,12 +142,12 @@ async def process_image_watermark(client, message: Message):
         # **اصلاح ۱: گرفتن مسیر واقعی فایل دانلود شده**
         input_path = await message.download(file_name=input_path_placeholder, progress=progress_bar, progress_args=(msg, start, "دانلود"))
 
-        # مرحله افزودن واترمارک
-        await msg.edit("⚙️ در حال افزودن تصویر واترمارک...")
-        await add_image_watermark(input_path, output_file, image, position, size)
+        # مرحله افزودن واترمارک (پیام قبلی حذف شد)
+        # **** تغییر کلیدی: پاس دادن msg ****
+        await add_image_watermark(input_path, output_file, image, position, size, msg)
 
         if not os.path.exists(output_file):
-             raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فایل یا کدک)")
+                raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فایل یا کدک)")
 
         # مرحله آپلود
         await msg.edit("⬆️ در حال آپلود فایل نهایی...")
