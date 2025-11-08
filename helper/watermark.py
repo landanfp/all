@@ -87,6 +87,8 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     except Exception as e:
         raise Exception(f"Error during animated text watermark processing: {e}")
 
+# ----------------------------------------------------------------------------------
+
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
     """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با تکرار حلقوی)."""
     
@@ -165,9 +167,14 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
 
         if process.returncode != 0:
             error_output = stderr.decode()
-            raise Exception(f"FFmpeg failed: {error_output[:200]}...")
+            # این خط برای نمایش کل پیام خطا اصلاح شده است
+            raise Exception(f"FFmpeg failed: {error_output}") 
 
     except FileNotFoundError:
         raise FileNotFoundError("FFmpeg command not found. Please install FFmpeg.")
     except Exception as e:
-        raise Exception(f"Error during animated image watermark processing: {e}")
+        # در اینجا نیز برای رفع مشکل قبلی، فقط به پیام خود FFmpeg ارجاع می‌دهیم
+        if "FFmpeg failed" in str(e):
+             raise e
+        else:
+             raise Exception(f"Error during animated image watermark processing: {e}")
