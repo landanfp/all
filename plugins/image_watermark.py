@@ -3,7 +3,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from helper.state import set_state, get_state, clear_state
 from helper.watermark import add_image_watermark
-from helper.progress import progress_bar
+from helper.progress import progress_bar, format_time_progress
 import os
 import time
 
@@ -126,6 +126,8 @@ async def process_image_watermark(client, message: Message):
         clear_state(user_id)
         return
 
+    duration = message.video.duration # مدت زمان ویدیو را بگیرید
+
     msg = await message.reply("⏳ در حال دانلود ویدیو...")
 
     input_path_placeholder = f"{message.video.file_id}_{user_id}.mp4"
@@ -139,7 +141,8 @@ async def process_image_watermark(client, message: Message):
 
         # مرحله افزودن واترمارک
         await msg.edit("⚙️ در حال افزودن تصویر واترمارک...")
-        await add_image_watermark(input_path, output_file, image, position, size)
+        # ارسال message و duration برای نمایش پیشرفت
+        await add_image_watermark(input_path, output_file, image, position, size, message=msg, duration=duration)
 
         if not os.path.exists(output_file):
              raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فایل یا کدک)")
