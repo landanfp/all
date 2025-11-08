@@ -1,6 +1,7 @@
 # نام فایل: helper/progress.py (ابزارهای نوار پیشرفت)
 import time
 from pyrogram.types import Message
+import asyncio  # برای threadsafe
 
 async def progress_bar(current, total, message: Message, start, stage="در حال پردازش"):
     """آپدیت پیام در حین دانلود/آپلود/پردازش برای نمایش پیشرفت."""
@@ -10,22 +11,21 @@ async def progress_bar(current, total, message: Message, start, stage="در حا
     if diff == 0:
         diff = 1
 
-    percentage = current * 100 / total
-    speed = current / diff
-    eta = (total - current) / speed
+    percentage = current * 100 / total if total else 0
+    speed = current / diff if diff > 0 else 0
+    eta = (total - current) / speed if speed > 0 else 0
 
     filled_blocks = int(percentage // 10)
     empty_blocks = 10 - filled_blocks
     bar = f"[{'█' * filled_blocks}{'░' * empty_blocks}]"
     
     if stage == "watermark":
-        # فرمت خاص برای واترمارک: ساده و time-based
+        # فرمت درخواستی
         progress_text = (
             f"{percentage:.1f}% {bar}\n"
             f"مدت زمان باقی تا اتمام: **{int(eta)}s**"
         )
     else:
-        # فرمت قدیمی برای دانلود/آپلود
         progress_text = (
             f"**مرحله {stage}**: {bar} **{percentage:.1f}%**\n"
             f"📥/📤 داده: **{human_readable_size(current)}** از **{human_readable_size(total)}**\n"
@@ -33,15 +33,16 @@ async def progress_bar(current, total, message: Message, start, stage="در حا
             f"⏱️ زمان تخمینی: **{int(eta)}s**"
         )
 
-    # جلوگیری از Flood Wait: تنها اگر 5 ثانیه از آخرین ویرایش گذشته باشد یا درصد کامل شده باشد
-    if int(diff) % 5 == 0 or percentage == 100 or percentage == 0:
+    # Flood wait prevention
+    if int(now - start) % 5 == 0 or percentage >= 100 or percentage == 0:
         try:
-            await message.edit(progress_text)
-        except Exception:
-            pass # نادیده گرفتن خطاهای ویرایش
+            await message.edit_text(progress_text)  # edit_text برای safety
+        except Exception as e:
+            print(f"Edit error: {e}")
+            pass
 
 def human_readable_size(size):
-    """تبدیل بایت به واحد‌های خوانا (KB, MB, GB)."""
+    """تبدیل بایت به واحد‌های خوانا."""
     power = 2**10
     n = 0
     power_labels = {0: 'B', 1: 'KB', 2: 'MB', 3: 'GB'}
