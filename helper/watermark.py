@@ -10,8 +10,6 @@ from helper.progress import format_time_progress, time_to_seconds
 
 # تعریف Regex برای استخراج زمان (time=HH:MM:SS.ms) از خروجی FFmpeg
 TIME_REGEX = re.compile(r'time=(\d{2}:\d{2}:\d{2}\.\d{2})')
-# Regex برای استخراج فریم (frame=...)
-FRAME_REGEX = re.compile(r'frame=\s*(\d+)')
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent, message: Message, duration):
     """افزودن واترمارک متنی به ویدیو با استفاده از FFmpeg (نسخه متعادل - با فونت پیش‌فرض)."""
@@ -30,19 +28,18 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         f"x={position_map[position].split(':')[0]}:y={position_map[position].split(':')[1]}" 
     )
 
-    # **اصلاحیه کلیدی: اضافه کردن -loglevel repeat+info برای اطمینان از خروجی پیشرفت**
+    # اصلاحیه کلیدی: اضافه کردن -loglevel warning -stats
     cmd = (
         f"ffmpeg -i \"{input_path}\" -vf \"{drawtext}\" "
         f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "
         f"-map 0:v:0 -map 0:a:0? "
-        f"-loglevel warning -stats " # -stats کمک می‌کند تا FFmpeg مرتب‌تر خروجی بدهد
+        f"-loglevel warning -stats "
         f"\"{output_path}\" -y"
     )
     
     start_time = time.time()
     last_edit_time = 0
     try:
-        # تغییر: استفاده از PIPE برای خواندن خروجی زنده از stderr
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
             stdout=subprocess.PIPE, 
@@ -52,9 +49,9 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         while True:
             # خواندن خط جدید از خروجی خطا (که شامل آمار پیشرفت است)
             line = await process.stderr.readline()
-            if process.returncode is not None and not line: # پروسه تمام شده و خطی نیست
+            if process.returncode is not None and not line:
                  break
-            if not line: # صبر کن تا خط جدیدی بیاد یا پروسه تمام بشه
+            if not line:
                 await asyncio.sleep(0.1) 
                 continue
 
@@ -75,9 +72,8 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
                         await message.edit(f"⚙️ در حال افزودن واترمارک:\n{progress_text}")
                         last_edit_time = now
                     except Exception:
-                        pass # نادیده گرفتن خطاهای ویرایش
+                        pass
             elif "Error" in line_str or "failed" in line_str:
-                 # گزارش خطای فوری اگر FFmpeg در حین اجرا خطا داد
                  print(f"FFmpeg Runtime Error (Text): {line_str.strip()}")
 
         # انتظار برای اتمام پروسه و گرفتن خروجی نهایی
@@ -86,7 +82,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         if process.returncode != 0:
             error_output = stderr.decode()
             print(f"FFmpeg Final Error (Text): {error_output}")
-            raise Exception(f"FFmpeg failed: {error_output}") 
+            raise Exception(f"FFmpeg failed: {error_output[:500]}...") 
 
     except FileNotFoundError as e:
         if "ffmpeg" in str(e):
@@ -94,7 +90,11 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         else:
             raise e
     except Exception as e:
-        raise Exception(f"Error during text watermark processing: {e}")
+        if 'MessageNotModified' in str(e):
+            # اگر خطای ویرایش تکراری در حلقه Progress رخ داد، نادیده گرفته شود
+            pass
+        else:
+            raise Exception(f"Error during text watermark processing: {e}")
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent, message: Message, duration):
     """افزودن واترمارک تصویری به ویدیو با استفاده از FFmpeg (نسخه متعادل و فیکس نهایی پیش‌نمایش)."""
@@ -112,7 +112,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"[ov]format=yuv420p[outv]" 
     )
 
-    # **اصلاحیه کلیدی: اضافه کردن -stats برای اطمینان از خروجی پیشرفت**
+    # اصلاحیه کلیدی: اضافه کردن -loglevel warning -stats
     cmd = (
         f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
         f"-filter_complex \"{filter_complex}\" "
@@ -120,14 +120,13 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-profile:v high -level:v 4.0 " 
         f"-g 30 -keyint_min 1 -movflags +faststart "
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 "
-        f"-loglevel warning -stats " # -stats کمک می‌کند تا FFmpeg مرتب‌تر خروجی بدهد
+        f"-loglevel warning -stats "
         f"\"{output_path}\" -y" 
     )
     
     start_time = time.time()
     last_edit_time = 0
     try:
-        # تغییر: استفاده از PIPE برای خواندن خروجی زنده
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
             stdout=subprocess.PIPE, 
@@ -159,8 +158,8 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                         await message.edit(f"⚙️ در حال افزودن تصویر واترمارک:\n{progress_text}")
                         last_edit_time = now
                     except Exception:
-                        pass # نادیده گرفتن خطاهای ویرایش
-            elif "Error" in line_str or "failed" in line_str:
+                        pass
+            elif "Error" in line_str or "failed" in line_str or "Invalid argument" in line_str:
                  print(f"FFmpeg Runtime Error (Image): {line_str.strip()}")
 
         # انتظار برای اتمام پروسه و گرفتن خروجی نهایی
@@ -169,9 +168,14 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         if process.returncode != 0:
             error_output = stderr.decode()
             print(f"FFmpeg Final Error (Image): {error_output}")
-            raise Exception(f"FFmpeg failed: {error_output[:200]}...")
+            # نمایش 500 کاراکتر اول خطا برای تشخیص بهتر
+            raise Exception(f"FFmpeg failed: {error_output[:500]}...")
 
     except FileNotFoundError:
         raise FileNotFoundError("FFmpeg command not found. Please install FFmpeg.")
     except Exception as e:
-        raise Exception(f"Error during image watermark processing: {e}")
+        if 'MessageNotModified' in str(e):
+            # اگر خطای ویرایش تکراری در حلقه Progress رخ داد، نادیده گرفته شود
+            pass
+        else:
+            raise Exception(f"Error during image watermark processing: {e}")
