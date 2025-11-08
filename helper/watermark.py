@@ -24,6 +24,7 @@ async def get_video_duration(video_path):
         if process.returncode == 0 and stdout:
             return float(stdout.decode().strip())
         else:
+            # نمایش خطای کامل FFprobe
             print(f"FFprobe Error: {stderr.decode()}")
             return 0.0
     except Exception as e:
@@ -58,6 +59,8 @@ TIME_REGEX = re.compile(r"time=(\d{2}:\d{2}:\d{2}\.\d{2})")
 
 # --- توابع اصلی واترمارک (اصلاح شده) ---
 
+# FONT_FILE_PATH حذف شد. FFmpeg از فونت پیش‌فرض سیستم استفاده خواهد کرد.
+
 async def add_text_watermark(input_path, output_path, text, position, size_percent, msg: Message):
     """
     افزودن واترمارک متنی با نمایش پیشرفت زنده.
@@ -75,16 +78,18 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     }
     safe_text = shlex.quote(text)
     
+    # اصلاح ۱: حذف fontfile برای استفاده از فونت پیش‌فرض
     drawtext = (
         f"drawtext=text={safe_text}:fontcolor=white@0.8:"
         f"fontsize=h*{size_percent}/100:shadowcolor=black@0.4:shadowx=2:shadowy=2:"
         f"x={position_map[position].split(':')[0]}:y={position_map[position].split(':')[1]}"
     )
 
+    # اصلاح ۲: اضافه شدن -c:a aac برای انکود مجدد صدا
     cmd = (
         f"ffmpeg -i \"{input_path}\" -vf \"{drawtext}\" "
         f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "
-        f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
+        f"-map 0:v:0 -map 0:a:0? -c:a aac \"{output_path}\" -y"
     )
 
     # 2. اجرای FFmpeg با stderr=PIPE تا بتوانیم خروجی را بخوانیم
@@ -104,7 +109,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
             break
         
         line_str = line.decode('utf-8').strip()
-        error_output += line_str # ذخیره خروجی برای دیباگ در صورت خطا
+        error_output += line_str + "\n"
         
         match = TIME_REGEX.search(line_str)
         if match:
@@ -113,7 +118,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
             
             # جلوگیری از آپدیت‌های مکرر (هر 3 ثانیه یکبار)
             now = time.time()
-            if now - last_update > 3: # (این ۳ ثانیه برای پردازش FFmpeg است، نه دانلود/آپلود)
+            if now - last_update > 3:
                 percentage = (current_time_sec / total_duration) * 100
                 
                 # محاسبه زمان باقیمانده (ETA)
@@ -126,7 +131,6 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
                 filled_blocks = int(percentage // 10)
                 bar = f"[{'█' * filled_blocks}{'░' * (10 - filled_blocks)}]"
                 
-                # فرمت دلخواه شما
                 progress_text = (
                     f"**⚙️ در حال پردازش واترمارک...**\n"
                     f"{percentage:.1f}% {bar}\n"
@@ -137,12 +141,13 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
                     await msg.edit(progress_text)
                     last_update = now
                 except Exception:
-                    pass # نادیده گرفتن خطای ویرایش (مثلا اگر پیام پاک شده باشد)
+                    pass
 
     await process.wait()
 
+    # اصلاح ۳: نمایش خطای کامل
     if process.returncode != 0:
-        raise Exception(f"FFmpeg failed: {error_output[-500:]}") # نمایش 500 کاراکتر آخر خطا
+        raise Exception(f"FFmpeg failed: {error_output}") 
 
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent, msg: Message):
@@ -168,12 +173,13 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"[ov]format=yuv420p[outv]"
     )
 
+    # اصلاح ۴: اضافه شدن -c:a aac برای انکود مجدد صدا
     cmd = (
         f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
         f"-filter_complex \"{filter_complex}\" "
         f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -vsync 1 "
         f"-profile:v high -level:v 4.0 -g 30 -keyint_min 1 -movflags +faststart "
-        f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y"
+        f"-map [outv] -map 0:a:0? -c:a aac -metadata:s:v:0 rotate=0 \"{output_path}\" -y"
     )
 
     # 2. اجرای FFmpeg با stderr=PIPE
@@ -193,7 +199,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             break
         
         line_str = line.decode('utf-8').strip()
-        error_output += line_str
+        error_output += line_str + "\n"
         
         match = TIME_REGEX.search(line_str)
         if match:
@@ -201,7 +207,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             current_time_sec = parse_ffmpeg_time(current_time_str)
             
             now = time.time()
-            if now - last_update > 3: # (این ۳ ثانیه برای پردازش FFmpeg است، نه دانلود/آپلود)
+            if now - last_update > 3:
                 percentage = (current_time_sec / total_duration) * 100
                 
                 elapsed_time = now - processing_start
@@ -226,5 +232,6 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
 
     await process.wait()
 
+    # اصلاح ۵: نمایش خطای کامل
     if process.returncode != 0:
-        raise Exception(f"FFmpeg failed: {error_output[-500:]}")
+        raise Exception(f"FFmpeg failed: {error_output}")
