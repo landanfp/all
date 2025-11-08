@@ -70,7 +70,10 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     try:
         total_duration = await get_video_duration(input_path)
         if message and start_time:
-            await message.edit("⚙️ در حال افزودن واترمارک...")  # پیام مستقیم
+            try:
+                await message.edit("⚙️ در حال افزودن واترمارک...")
+            except MessageNotModified:
+                pass  # ignore
 
         # شروع progress loop
         progress_loop = None
@@ -137,7 +140,10 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     try:
         total_duration = await get_video_duration(input_path)
         if message and start_time:
-            await message.edit("⚙️ در حال افزودن واترمارک...")  # مستقیم
+            try:
+                await message.edit("⚙️ در حال افزودن واترمارک...")
+            except MessageNotModified:
+                pass  # ignore
 
         # شروع progress loop
         progress_loop = None
