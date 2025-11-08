@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (منطق اصلی FFmpeg - فیکس ۱۰۰%: progress time-based تخمینی, پیام مستقیم)
+# نام فایل: helper/watermark.py (منطق اصلی FFmpeg - فیکس ۱۰۰%: progress time-based با cancel loop)
 import asyncio
 import os
 import subprocess
@@ -7,6 +7,7 @@ import json
 import time
 from pyrogram.types import Message
 from helper.progress import progress_bar  # import صریح
+from pyrogram.errors import MessageNotModified  # فیکس: import برای catch ارور edit
 
 async def get_video_duration(input_path):
     """استخراج duration ویدیو با ffprobe (به ثانیه)."""
@@ -33,7 +34,7 @@ async def update_watermark_progress(message, start_time, total_duration):
     percentage = min((elapsed / total_duration) * 100, 100) if total_duration else 0
     await progress_bar(percentage * total_duration / 100 * 10, total_duration * 10, message, start_time, "watermark")  # Fake current for bar
     if percentage < 100:
-        asyncio.create_task(asyncio.sleep(5))
+        await asyncio.sleep(5)
         await update_watermark_progress(message, start_time, total_duration)
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent, message: Message = None, start_time: float = None):
@@ -64,7 +65,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         'ffmpeg', '-i', input_path, '-vf', drawtext,
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
         '-map', '0:v:0', '-map', '0:a:0?', output_path, '-y'
-    ]  # حذف -progress pipe:1
+    ]
     
     try:
         total_duration = await get_video_duration(input_path)
@@ -82,8 +83,13 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
 
         stdout, stderr = await process.communicate()
 
+        # فیکس: cancel loop بعد از FFmpeg
         if progress_loop:
-            await progress_loop  # منتظر loop
+            progress_loop.cancel()
+            try:
+                await progress_loop
+            except asyncio.CancelledError:
+                pass
 
         if process.returncode != 0:
             error_output = stderr.decode('utf-8', errors='ignore')
@@ -124,14 +130,14 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         '-filter_complex', filter_complex,
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
         '-map', '0:v:0', '-map', '0:a:0?', '-movflags', '+faststart', output_path, '-y'
-    ]  # حذف pipe, map [outv] چون overlay مستقیم
+    ]
 
     print(f"Debug FFmpeg Cmd: {' '.join(cmd)}")
 
     try:
         total_duration = await get_video_duration(input_path)
         if message and start_time:
-            await message.edit("⚙️ در حال افزودن واترمارک...")  # مستقیم, بدون آماده‌سازی
+            await message.edit("⚙️ در حال افزودن واترمارک...")  # مستقیم
 
         # شروع progress loop
         progress_loop = None
@@ -144,8 +150,13 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
 
         stdout, stderr = await process.communicate()
 
+        # فیکس: cancel loop بعد از FFmpeg
         if progress_loop:
-            await progress_loop
+            progress_loop.cancel()
+            try:
+                await progress_loop
+            except asyncio.CancelledError:
+                pass
 
         if process.returncode != 0:
             error_output = stderr.decode('utf-8', errors='ignore')
