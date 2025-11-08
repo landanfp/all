@@ -1,6 +1,7 @@
 # نام فایل: plugins/image_watermark.py (هندلرهای واترمارک تصویری)
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.errors import MessageNotModified # اضافه شد
 from helper.state import set_state, get_state, clear_state
 from helper.watermark import add_image_watermark
 from helper.progress import progress_bar, format_time_progress
@@ -18,7 +19,14 @@ sizes = [10, 15, 20, 25, 30, 35, 40, 45, 50]
 async def ask_image(client, query: CallbackQuery):
     """درخواست تصویر واترمارک."""
     user_id = query.from_user.id
-    await query.message.edit("لطفا تصویری برای واترمارک ارسال کنید (فقط jpg یا png):")
+    
+    await query.answer() # پاسخ سریع به Callback
+
+    try:
+        await query.message.edit("لطفا تصویری برای واترمارک ارسال کنید (فقط jpg یا png):")
+    except MessageNotModified:
+        pass # نادیده گرفتن اگر پیام قبلاً ویرایش شده بود.
+        
     set_state(user_id, "step", "image_upload")
     print(f"Debug: Set step to 'image_upload' for user {user_id}")  # لاگ set state
 
@@ -27,10 +35,10 @@ async def handle_image_upload(client, message: Message):
     user_id = message.from_user.id
     current_step = get_state(user_id, "step")
     msg_type = 'photo' if message.photo else ('document' if message.document else 'unknown')
-    print(f"Debug: Image handler triggered for user {user_id}, current step: {current_step}, type: {msg_type}")  # لاگ trigger
+    print(f"Debug: Image handler triggered for user {user_id}, current step: {current_step}, type: {msg_type}")
     
     if current_step != "image_upload":
-        print(f"Debug: Wrong step for user {user_id}, skipping.")  # لاگ skip
+        print(f"Debug: Wrong step for user {user_id}, skipping.")
         await message.reply("❌ لطفا ابتدا گزینه '🖼️ واترمارک تصویری' را انتخاب کنید و مراحل را به ترتیب طی کنید. (/start)")
         return
 
@@ -45,7 +53,7 @@ async def handle_image_upload(client, message: Message):
     # **فیکس: گرفتن file_name از photo (file_unique_id) یا document (file_name)**
     file_name = None
     if message.photo:
-        file_name = f"{message.photo.file_unique_id}.jpg"  # photo همیشه jpg
+        file_name = f"{message.photo.file_unique_id}.jpg"
     elif message.document:
         file_name = message.document.file_name or f"{message.document.file_unique_id}.jpg"
     
@@ -54,7 +62,7 @@ async def handle_image_upload(client, message: Message):
     temp_path = f"{getattr(message.photo, 'file_unique_id', getattr(message.document, 'file_unique_id', 'unknown'))}_{user_id}.{file_extension}"
     try:
         image_file = await message.download(file_name=temp_path)
-        print(f"Debug: Image downloaded to {image_file}")  # لاگ دانلود
+        print(f"Debug: Image downloaded to {image_file}")
     except Exception as e:
         print(f"Download Error for user {user_id}: {e}")
         await message.reply("❌ خطا در دانلود تصویر. لطفا دوباره امتحان کنید.")
@@ -78,7 +86,7 @@ async def handle_image_upload(client, message: Message):
         buttons_row = [InlineKeyboardButton(pos[1], callback_data=f"image_pos_{pos[0]}") for pos in reversed(row_positions)]
         buttons.append(buttons_row)
     await message.reply("موقعیت تصویر واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(buttons))
-    print(f"Debug: Image processed, set step to 'position' for user {user_id}")  # لاگ موفقیت
+    print(f"Debug: Image processed, set step to 'position' for user {user_id}")
 
 async def set_image_position(client, query: CallbackQuery):
     """دریافت موقعیت و درخواست سایز."""
@@ -87,7 +95,7 @@ async def set_image_position(client, query: CallbackQuery):
         await query.answer("لطفا مراحل را به ترتیب طی کنید.")
         return
 
-    position = query.data.split("_", 2)[-1]  # فیکس: maxsplit=2 برای گرفتن کل 'top_right'
+    position = query.data.split("_", 2)[-1]
     set_state(user_id, "position", position)
     set_state(user_id, "step", "size")
 
@@ -136,7 +144,7 @@ async def process_image_watermark(client, message: Message):
     input_path = None # مسیر واقعی دانلود شده
 
     try:
-        # **اصلاح ۱: گرفتن مسیر واقعی فایل دانلود شده**
+        # مرحله دانلود
         input_path = await message.download(file_name=input_path_placeholder, progress=progress_bar, progress_args=(msg, start, "دانلود"))
 
         # مرحله افزودن واترمارک
@@ -157,16 +165,13 @@ async def process_image_watermark(client, message: Message):
             supports_streaming=True
         )
         
-        # **اصلاح ۲: حذف پیام پیشرفت در صورت موفقیت**
         await msg.delete()
 
     except Exception as e:
         print(f"Image Watermark Error: {e}")
-        # در صورت خطا، پیام را ویرایش می‌کنیم و آن را حذف نمی‌کنیم.
         await msg.edit(f"❌ یک خطا رخ داد: {e}")
 
     finally:
-        # **اصلاح ۳: حذف msg.delete() و فقط پاکسازی فایل‌ها**
         # پاکسازی فایل‌ها با استفاده از مسیر واقعی
         if input_path and os.path.exists(input_path): os.remove(input_path)
         if os.path.exists(output_file): os.remove(output_file)
