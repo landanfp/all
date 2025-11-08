@@ -1,7 +1,6 @@
 # نام فایل: helper/progress.py (ابزارهای نوار پیشرفت)
 import time
 from pyrogram.types import Message
-import asyncio  # برای threadsafe (اگر لازم شد)
 
 async def progress_bar(current, total, message: Message, start, stage="در حال پردازش"):
     """آپدیت پیام در حین دانلود/آپلود/پردازش برای نمایش پیشرفت."""
@@ -38,7 +37,7 @@ async def progress_bar(current, total, message: Message, start, stage="در حا
     # Flood wait prevention
     if int(now - start) % 5 == 0 or percentage >= 100 or percentage == 0:
         try:
-            await message.edit(progress_text)  # فیکس: edit نه edit_text
+            await message.edit(progress_text)
         except Exception as e:
             print(f"Edit error: {e}")
             pass
