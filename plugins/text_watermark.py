@@ -4,7 +4,6 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, 
 from helper.state import set_state, get_state, clear_state
 from helper.watermark import add_text_watermark
 from helper.progress import progress_bar
-from pyrogram.errors import MessageNotModified  # فیکس: import برای catch ارور edit
 import os
 import time
 
@@ -66,10 +65,7 @@ async def set_position(client, query: CallbackQuery):
         [InlineKeyboardButton(f"{s}%", callback_data=f"text_size_{s}") for s in sizes[i:i+5]]
         for i in range(0, len(sizes), 5)
     ]
-    try:
-        await query.message.edit("سایز واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(size_buttons))
-    except MessageNotModified:
-        pass  # فیکس: ignore
+    await query.message.edit("سایز واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(size_buttons))
 
 async def set_size(client, query: CallbackQuery):
     """دریافت سایز و آماده‌سازی برای ویدیو."""
@@ -81,10 +77,7 @@ async def set_size(client, query: CallbackQuery):
     size = int(query.data.split("_")[-1])
     set_state(user_id, "size", size)
     set_state(user_id, "step", "ready")
-    try:
-        await query.message.edit("✅ همه‌چیز آماده‌ست! حالا ویدیوی موردنظر را ارسال کن تا واترمارک متنی اضافه شود.")
-    except MessageNotModified:
-        pass  # فیکس: ignore
+    await query.message.edit("✅ همه‌چیز آماده‌ست! حالا ویدیوی موردنظر را ارسال کن تا واترمارک متنی اضافه شود.")
 
 async def handle_video(client, message: Message):
     """دریافت ویدیو، پردازش و ارسال خروجی."""
@@ -104,20 +97,23 @@ async def handle_video(client, message: Message):
 
     msg = await message.reply("⏳ در حال دانلود ویدیو...")
 
+    # استفاده از یک نام محلی برای دانلود
     input_path_placeholder = f"{message.video.file_id}_{user_id}.mp4"
     output_file = f"wm_{message.video.file_id}_{user_id}.mp4"
     start = time.time()
-    input_path = None
+    input_path = None # مسیر واقعی دانلود شده
     
     try:
+        # **اصلاح ۱: گرفتن مسیر واقعی فایل دانلود شده**
         input_path = await message.download(file_name=input_path_placeholder, progress=progress_bar, progress_args=(msg, start, "دانلود"))
 
-        # مرحله افزودن واترمارک با progress (edit مستقیم)
+        # مرحله افزودن واترمارک
         await msg.edit("⚙️ در حال افزودن واترمارک...")
-        await add_text_watermark(input_path, output_file, text, position, size, msg, start)
+        await add_text_watermark(input_path, output_file, text, position, size) # استفاده از مسیر واقعی
         
         if not os.path.exists(output_file):
-            raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فونت یا کدک)")
+             # اگر FFmpeg شکست خورد، باید یک Exception را Raise کنیم تا به بلوک except برود
+             raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فونت یا کدک)")
 
         # مرحله آپلود 
         await msg.edit("⬆️ در حال آپلود فایل...")
@@ -129,13 +125,17 @@ async def handle_video(client, message: Message):
             supports_streaming=True
         )
         
+        # **اصلاح ۲: حذف پیام پیشرفت در صورت موفقیت**
         await msg.delete()
 
     except Exception as e:
         print(f"Text Watermark Error: {e}")
+        # در صورت خطا، پیام را ویرایش می‌کنیم و آن را حذف نمی‌کنیم.
         await msg.edit(f"❌ یک خطا رخ داد: {e}")
 
     finally:
+        # **اصلاح ۳: حذف msg.delete() و فقط پاکسازی فایل‌ها**
+        # پاکسازی فایل‌ها با استفاده از مسیر واقعی
         if input_path and os.path.exists(input_path):
             os.remove(input_path)
         if os.path.exists(output_file):
