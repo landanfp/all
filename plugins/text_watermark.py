@@ -4,6 +4,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, 
 from helper.state import set_state, get_state, clear_state
 from helper.watermark import add_text_watermark
 from helper.progress import progress_bar
+from pyrogram.errors import MessageNotModified  # فیکس: import برای catch ارور edit
 import os
 import time
 
@@ -65,7 +66,10 @@ async def set_position(client, query: CallbackQuery):
         [InlineKeyboardButton(f"{s}%", callback_data=f"text_size_{s}") for s in sizes[i:i+5]]
         for i in range(0, len(sizes), 5)
     ]
-    await query.message.edit("سایز واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(size_buttons))
+    try:
+        await query.message.edit("سایز واترمارک را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(size_buttons))
+    except MessageNotModified:
+        pass  # فیکس: ignore
 
 async def set_size(client, query: CallbackQuery):
     """دریافت سایز و آماده‌سازی برای ویدیو."""
@@ -77,7 +81,10 @@ async def set_size(client, query: CallbackQuery):
     size = int(query.data.split("_")[-1])
     set_state(user_id, "size", size)
     set_state(user_id, "step", "ready")
-    await query.message.edit("✅ همه‌چیز آماده‌ست! حالا ویدیوی موردنظر را ارسال کن تا واترمارک متنی اضافه شود.")
+    try:
+        await query.message.edit("✅ همه‌چیز آماده‌ست! حالا ویدیوی موردنظر را ارسال کن تا واترمارک متنی اضافه شود.")
+    except MessageNotModified:
+        pass  # فیکس: ignore
 
 async def handle_video(client, message: Message):
     """دریافت ویدیو، پردازش و ارسال خروجی."""
