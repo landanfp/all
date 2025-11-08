@@ -1,6 +1,7 @@
 # نام فایل: helper/progress.py (ابزارهای نوار پیشرفت)
 import time
 from pyrogram.types import Message
+from pyrogram.errors import MessageNotModified  # فیکس: import برای catch ارور edit
 
 async def progress_bar(current, total, message: Message, start, stage="در حال پردازش"):
     """آپدیت پیام در حین دانلود/آپلود/پردازش برای نمایش پیشرفت."""
@@ -38,6 +39,8 @@ async def progress_bar(current, total, message: Message, start, stage="در حا
     if int(now - start) % 5 == 0 or percentage >= 100 or percentage == 0:
         try:
             await message.edit(progress_text)
+        except MessageNotModified:
+            pass  # فیکس: ignore اگر content یکسان باشه
         except Exception as e:
             print(f"Edit error: {e}")
             pass
