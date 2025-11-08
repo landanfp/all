@@ -1,61 +1,67 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با اصلاح مسیر و موقعیت)
+# نام فایل: helper/watermark.py (نسخه نهایی با اصلاحات کامل)
 import asyncio
 import os
 import subprocess
 import shlex
 
-# تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
-# NOTE: از آنجایی که CYLCE_DURATION در هر تابع تغییر می‌کند، باید داخل توابع تعریف شود.
-T = "t" # متغیر زمان اصلی در FFmpeg
+# تعریف متغیر زمان اصلی FFmpeg
+T = "t" 
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
     """افزودن واترمارک متنی متحرک و محوشونده به ویدیو (با تکرار حلقوی)."""
     
-    # 1. تنظیمات زمان‌بندی انیمیشن (ورود 2، مکث 4، خروج 1.5)
+    # 1. تنظیمات زمان‌بندی انیمیشن
     MOVE_IN_DURATION = 2
     PAUSE_DURATION = 4
     MOVE_OUT_DURATION = 1.5 
     CYCLE_DURATION = MOVE_IN_DURATION + PAUSE_DURATION + MOVE_OUT_DURATION
     MOD_T = f"mod({T},{CYCLE_DURATION})"
     
-    # 2. محاسبه مختصات نهایی در مرحله مکث (هدف: بالا-راست)
-    FINAL_X_PAUSE = "main_w-text_w-20" 
-    FINAL_Y_PAUSE = "20" 
+    # 2. محاسبه مختصات
+    FINAL_X_PAUSE = "main_w-text_w-20" # نقطه توقف: بالا-راست (افقی)
+    FINAL_Y_PAUSE = "20" # نقطه توقف: بالا-راست (عمودی)
     
-    # 3. محاسبه مختصات نهایی برای خروج (مستقیم به پایین)
-    FINAL_X_OUT = FINAL_X_PAUSE 
-    FINAL_Y_OUT = "main_h-text_h-20" 
+    START_X_IN = "(main_w-text_w)/2" # ورودی از: بالا-وسط (افقی)
+    START_Y_IN = "-text_h" # ورودی از: بالای صفحه (عمودی)
 
-    # 4. تعریف انیمیشن (Expressionها)
+    # نقطه شروع محو شدن (زودتر در مرحله خروج)
+    FADE_OUT_START_TIME = MOVE_IN_DURATION + PAUSE_DURATION + (MOVE_OUT_DURATION * 0.5) 
+
+    # 3. تعریف انیمیشن (Expressionها)
     
-    # A. موقعیت X: ورود از چپ، توقف در راست، ثابت تا خروج
+    # A. موقعیت X: ورودی از بالا-وسط (X ثابت)، توقف در راست، ثابت تا خروج
     X_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
-            f"({FINAL_X_PAUSE}) * {MOD_T} / {MOVE_IN_DURATION} - text_w * (1 - {MOD_T} / {MOVE_IN_DURATION}), "
+            f"{START_X_IN}, " 
         f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
             f"{FINAL_X_PAUSE}, "
-            f"{FINAL_X_OUT})" 
+            f"{FINAL_X_PAUSE})" 
         ")"
     )
 
-    # B. موقعیت Y: توقف در بالا، حرکت مستقیم به پایین در زمان خروج
+    # B. موقعیت Y: ورودی از بالای صفحه به بالا، توقف در بالا، حرکت مستقیم به پایین در زمان خروج
     Y_EXPRESSION = (
+        f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
+            f"{START_Y_IN} + ({FINAL_Y_PAUSE} - {START_Y_IN}) * {MOD_T} / {MOVE_IN_DURATION}, " 
         f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
             f"{FINAL_Y_PAUSE}, "
-            f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
+            f"{FINAL_Y_PAUSE} + (main_h-text_h-20 - {FINAL_Y_PAUSE}) * ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
+        ")"
     )
     
-    # C. محو شدن Alpha: محو شدن سریعتر
+    # C. محو شدن Alpha: ورود تدریجی، ثابت، محو شدن زودتر در مرحله خروج
     ALPHA_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
-            f"0.8 * {MOD_T} / {MOVE_IN_DURATION}, "
+            f"0.8 * {MOD_T} / {MOVE_IN_DURATION}, " 
         f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), "
             f"0.8, "
-            f"0.8 * (1 - ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION}))"
+        f"if(lt({MOD_T},{FADE_OUT_START_TIME}), " 
+            f"0.8, "
+            f"0.8 * (1 - ({MOD_T} - {FADE_OUT_START_TIME}) / ({CYCLE_DURATION} - {FADE_OUT_START_TIME}))))"
         ")"
     )
 
-    # 5. تعریف فیلتر Drawtext
+    # 4. تعریف فیلتر Drawtext
     safe_text = shlex.quote(text)
     
     drawtext_loop = (
@@ -66,14 +72,14 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         f"alpha='{ALPHA_EXPRESSION}'" 
     )
 
-    # 6. ساخت دستور FFmpeg
+    # 5. ساخت دستور FFmpeg
     cmd = (
         f"ffmpeg -i \"{input_path}\" -vf \"{drawtext_loop}\" "
         f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "
         f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
     )
     
-    # 7. اجرای ایمن FFmpeg (کوتاه کردن پیام خطا)
+    # 6. اجرای ایمن FFmpeg
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
@@ -102,22 +108,21 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
     """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با تکرار حلقوی)."""
     
-    # 1. تنظیمات زمان‌بندی انیمیشن (ورود 2، مکث 4، خروج 1.5)
+    # 1. تنظیمات زمان‌بندی انیمیشن
     MOVE_IN_DURATION = 2
     PAUSE_DURATION = 4
     MOVE_OUT_DURATION = 1.5 
     CYCLE_DURATION = MOVE_IN_DURATION + PAUSE_DURATION + MOVE_OUT_DURATION
     MOD_T = f"mod({T},{CYCLE_DURATION})"
 
-    # 2. محاسبه مختصات نهایی در مرحله مکث (هدف: بالا-راست)
+    # 2. محاسبه مختصات
     FINAL_X_PAUSE = "main_w-overlay_w-20"
     FINAL_Y_PAUSE = "20" 
 
-    # 3. محاسبه مختصات نهایی برای خروج (مستقیم به پایین)
     FINAL_X_OUT = FINAL_X_PAUSE
     FINAL_Y_OUT = "main_h-overlay_h-20" 
 
-    # 4. تعریف انیمیشن (Expressionها)
+    # 3. تعریف انیمیشن (Expressionها)
     X_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
             f"({FINAL_X_PAUSE}) * {MOD_T} / {MOVE_IN_DURATION} - overlay_w * (1 - {MOD_T} / {MOVE_IN_DURATION}), "
@@ -142,22 +147,20 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         ")"
     )
 
-    # 5. ساخت فیلتر `filter_complex`
+    # 4. ساخت فیلتر `filter_complex`
     filter_complex = (
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];" 
         
-        # اعمال آلفا بر اساس زمان
-        f"[wm]colorchannelmixer=aa='{ALPHA_EXPRESSION}'[wma];" 
-        
-        # اعمال انیمیشن X و Y در فیلتر overlay
-        f"[v][wma]overlay=x='{X_EXPRESSION}':"
+        # **اصلاح شد**: حذف colorchannelmixer و انتقال alpha به فیلتر overlay
+        f"[v][wm]overlay=x='{X_EXPRESSION}':"
         f"y='{Y_EXPRESSION}':"
+        f"alpha='{ALPHA_EXPRESSION}':" 
         f"eof_action=repeat[ov];" 
         f"[ov]format=yuv420p[outv]" 
     )
 
-    # 6. ساخت دستور FFmpeg
+    # 5. ساخت دستور FFmpeg
     cmd = (
         f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
         f"-filter_complex \"{filter_complex}\" "
@@ -167,7 +170,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
     )
     
-    # 7. اجرای ایمن FFmpeg (کوتاه کردن پیام خطا)
+    # 6. اجرای ایمن FFmpeg
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
