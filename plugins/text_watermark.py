@@ -80,6 +80,8 @@ async def set_size(client, query: CallbackQuery):
     set_state(user_id, "step", "ready")
     await query.message.edit("✅ همه‌چیز آماده‌ست! حالا ویدیوی موردنظر را ارسال کن تا واترمارک متنی اضافه شود.")
 
+# ... (بقیه کد بدون تغییر)
+
 async def handle_video(client, message: Message):
     """دریافت ویدیو، پردازش و ارسال خروجی."""
     user_id = message.from_user.id
@@ -96,27 +98,22 @@ async def handle_video(client, message: Message):
         clear_state(user_id)
         return
 
-    duration = message.video.duration # مدت زمان ویدیو را بگیرید
-
     msg = await message.reply("⏳ در حال دانلود ویدیو...")
 
-    # استفاده از یک نام محلی برای دانلود
     input_path_placeholder = f"{message.video.file_id}_{user_id}.mp4"
     output_file = f"wm_{message.video.file_id}_{user_id}.mp4"
     start = time.time()
-    input_path = None # مسیر واقعی دانلود شده
+    input_path = None
     
     try:
-        # مرحله دانلود
         input_path = await message.download(file_name=input_path_placeholder, progress=progress_bar, progress_args=(msg, start, "دانلود"))
 
-        # مرحله افزودن واترمارک
+        # مرحله افزودن واترمارک با progress
         await msg.edit("⚙️ در حال افزودن واترمارک...")
-        # ارسال message و duration برای نمایش پیشرفت
-        await add_text_watermark(input_path, output_file, text, position, size, message=msg, duration=duration) 
+        await add_text_watermark(input_path, output_file, text, position, size, msg, start)
         
         if not os.path.exists(output_file):
-             raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فونت یا کدک)")
+            raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فونت یا کدک)")
 
         # مرحله آپلود 
         await msg.edit("⬆️ در حال آپلود فایل...")
@@ -135,7 +132,6 @@ async def handle_video(client, message: Message):
         await msg.edit(f"❌ یک خطا رخ داد: {e}")
 
     finally:
-        # پاکسازی فایل‌ها با استفاده از مسیر واقعی
         if input_path and os.path.exists(input_path):
             os.remove(input_path)
         if os.path.exists(output_file):
