@@ -3,10 +3,15 @@ import asyncio
 import os
 import subprocess
 import shlex
+import re # اضافه شد
+import time # اضافه شد
+from pyrogram.types import Message # اضافه شد
+from helper.progress import format_time_progress, time_to_seconds # اضافه شد
 
-# متغیر FONT_PATH و بررسی آن حذف شدند تا از فونت پیش‌فرض FFmpeg استفاده شود.
+# تعریف Regex برای استخراج زمان (time=HH:MM:SS.ms) از خروجی FFmpeg
+TIME_REGEX = re.compile(r'time=(\d{2}:\d{2}:\d{2}\.\d{2})')
 
-async def add_text_watermark(input_path, output_path, text, position, size_percent):
+async def add_text_watermark(input_path, output_path, text, position, size_percent, message: Message, duration):
     """افزودن واترمارک متنی به ویدیو با استفاده از FFmpeg (نسخه متعادل - با فونت پیش‌فرض)."""
     position_map = {
         # با اضافه کردن حاشیه 20 پیکسلی
@@ -38,13 +43,44 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
     )
     
-    # اجرای ایمن FFmpeg با shlex.split
+    # اجرای ایمن FFmpeg با shlex.split و افزودن نمایش پیشرفت
+    start_time = time.time()
+    last_edit_time = 0
     try:
+        # تغییر: استفاده از PIPE برای خواندن خروجی زنده
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE
         )
+        
+        # خواندن خطوط خروجی FFmpeg برای نمایش پیشرفت
+        while True:
+            # خواندن خط جدید از خروجی خطا
+            line = await process.stderr.readline()
+            if not line:
+                break
+            
+            line_str = line.decode(errors='ignore')
+            
+            match = TIME_REGEX.search(line_str)
+            if match:
+                current_time_str = match.group(1)
+                current_seconds = time_to_seconds(current_time_str)
+                
+                now = time.time()
+                # جلوگیری از Flood Wait: آپدیت هر ۳ ثانیه
+                if now - last_edit_time >= 3 or current_seconds >= duration:
+                    
+                    progress_text = format_time_progress(current_seconds, duration, start_time)
+                    
+                    try:
+                        await message.edit(f"⚙️ در حال افزودن واترمارک:\n{progress_text}")
+                        last_edit_time = now
+                    except Exception:
+                        pass # نادیده گرفتن خطاهای ویرایش
+
+        # انتظار برای اتمام پروسه و گرفتن خروجی نهایی
         stdout, stderr = await process.communicate()
         
         if process.returncode != 0:
@@ -61,7 +97,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     except Exception as e:
         raise Exception(f"Error during text watermark processing: {e}")
 
-async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
+async def add_image_watermark(input_path, output_path, image_path, position, size_percent, message: Message, duration):
     """افزودن واترمارک تصویری به ویدیو با استفاده از FFmpeg (نسخه متعادل و فیکس نهایی پیش‌نمایش)."""
     position_map = {
         "top_right": "main_w-overlay_w-20:20",
@@ -93,13 +129,43 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
     )
     
-    # اجرای ایمن FFmpeg
+    # اجرای ایمن FFmpeg و افزودن نمایش پیشرفت
+    start_time = time.time()
+    last_edit_time = 0
     try:
+        # تغییر: استفاده از PIPE برای خواندن خروجی زنده
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE
         )
+        
+        # خواندن خطوط خروجی FFmpeg برای نمایش پیشرفت
+        while True:
+            line = await process.stderr.readline()
+            if not line:
+                break
+            
+            line_str = line.decode(errors='ignore')
+            
+            match = TIME_REGEX.search(line_str)
+            if match:
+                current_time_str = match.group(1)
+                current_seconds = time_to_seconds(current_time_str)
+                
+                now = time.time()
+                # جلوگیری از Flood Wait: آپدیت هر ۳ ثانیه
+                if now - last_edit_time >= 3 or current_seconds >= duration:
+                    
+                    progress_text = format_time_progress(current_seconds, duration, start_time)
+                    
+                    try:
+                        await message.edit(f"⚙️ در حال افزودن تصویر واترمارک:\n{progress_text}")
+                        last_edit_time = now
+                    except Exception:
+                        pass # نادیده گرفتن خطاهای ویرایش
+
+        # انتظار برای اتمام پروسه و گرفتن خروجی نهایی
         stdout, stderr = await process.communicate()
 
         if process.returncode != 0:
