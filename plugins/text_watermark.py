@@ -3,7 +3,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from helper.state import set_state, get_state, clear_state
 from helper.watermark import add_text_watermark
-from helper.progress import progress_bar  # فیکس: فقط progress_bar import شده
+from helper.progress import progress_bar
 import os
 import time
 
@@ -97,23 +97,20 @@ async def handle_video(client, message: Message):
 
     msg = await message.reply("⏳ در حال دانلود ویدیو...")
 
-    # استفاده از یک نام محلی برای دانلود
     input_path_placeholder = f"{message.video.file_id}_{user_id}.mp4"
     output_file = f"wm_{message.video.file_id}_{user_id}.mp4"
     start = time.time()
-    input_path = None # مسیر واقعی دانلود شده
+    input_path = None
     
     try:
-        # **اصلاح ۱: گرفتن مسیر واقعی فایل دانلود شده**
         input_path = await message.download(file_name=input_path_placeholder, progress=progress_bar, progress_args=(msg, start, "دانلود"))
 
-        # مرحله افزودن واترمارک با progress
+        # مرحله افزودن واترمارک با progress (edit مستقیم)
         await msg.edit("⚙️ در حال افزودن واترمارک...")
-        await add_text_watermark(input_path, output_file, text, position, size, msg, start) # استفاده از مسیر واقعی
+        await add_text_watermark(input_path, output_file, text, position, size, msg, start)
         
         if not os.path.exists(output_file):
-             # اگر FFmpeg شکست خورد، باید یک Exception را Raise کنیم تا به بلوک except برود
-             raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فونت یا کدک)")
+            raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فونت یا کدک)")
 
         # مرحله آپلود 
         await msg.edit("⬆️ در حال آپلود فایل...")
@@ -125,17 +122,13 @@ async def handle_video(client, message: Message):
             supports_streaming=True
         )
         
-        # **اصلاح ۲: حذف پیام پیشرفت در صورت موفقیت**
         await msg.delete()
 
     except Exception as e:
         print(f"Text Watermark Error: {e}")
-        # در صورت خطا، پیام را ویرایش می‌کنیم و آن را حذف نمی‌کنیم.
         await msg.edit(f"❌ یک خطا رخ داد: {e}")
 
     finally:
-        # **اصلاح ۳: حذف msg.delete() و فقط پاکسازی فایل‌ها**
-        # پاکسازی فایل‌ها با استفاده از مسیر واقعی
         if input_path and os.path.exists(input_path):
             os.remove(input_path)
         if os.path.exists(output_file):
