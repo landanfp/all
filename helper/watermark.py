@@ -1,176 +1,173 @@
-# نام فایل: helper/watermark.py (منطق اصلی FFmpeg - فیکس ۱۰۰%: progress time-based با cancel loop)
+# نام فایل: helper/watermark.py (منطق اصلی FFmpeg - نسخه متحرک)
 import asyncio
 import os
 import subprocess
 import shlex
-import json
-import time
-from pyrogram.types import Message
-from helper.progress import progress_bar  # import صریح
-from pyrogram.errors import MessageNotModified  # فیکس: import برای catch ارور edit
 
-async def get_video_duration(input_path):
-    """استخراج duration ویدیو با ffprobe (به ثانیه)."""
-    try:
-        cmd = [
-            'ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
-            '-of', 'json', input_path
-        ]
-        process = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, _ = await process.communicate()
-        data = json.loads(stdout.decode())
-        duration = float(data['format']['duration'])  # به ثانیه
-        return duration
-    except Exception as e:
-        print(f"Duration fetch error: {e}")
-        return None
-
-async def update_watermark_progress(message, start_time, total_duration):
-    """update progress هر 5s بر اساس زمان گذشته (تخمینی linear)."""
-    now = time.time()
-    elapsed = now - start_time
-    percentage = min((elapsed / total_duration) * 100, 100) if total_duration else 0
-    await progress_bar(percentage * total_duration / 100 * 10, total_duration * 10, message, start_time, "watermark")  # Fake current for bar
-    if percentage < 100:
-        await asyncio.sleep(5)
-        await update_watermark_progress(message, start_time, total_duration)
-
-async def add_text_watermark(input_path, output_path, text, position, size_percent, message: Message = None, start_time: float = None):
-    """افزودن واترمارک متنی (progress time-based)."""
-    if not os.path.exists(input_path):
-        raise Exception(f"فایل ورودی پیدا نشد: {input_path}")
-
-    position_map = {
-        "top_right": "main_w-text_w-20:20",
-        "top_center": "(main_w-text_w)/2:20",
-        "top_left": "20:20",
-        "center_right": "main_w-text_w-20:(main_h-text_h)/2",
-        "center": "(main_w-text_w)/2:(main_h-text_h)/2",
-        "center_left": "20:(main_h-text_h)/2",
-        "bottom_right": "main_w-text_w-20:main_h-text_h-20",
-        "bottom_center": "(main_w-text_w)/2:main_h-text_h-20",
-        "bottom_left": "20:main_h-text_h-20"
-    }
-
-    safe_text = shlex.quote(text)
-    drawtext = (
-        f"drawtext=text={safe_text}:fontcolor=white@0.8:"
-        f"fontsize=h*{size_percent}/100:shadowcolor=black@0.4:shadowx=2:shadowy=2:"
-        f"x={position_map[position].split(':')[0]}:y={position_map[position].split(':')[1]}"
-    )
-
-    cmd = [
-        'ffmpeg', '-i', input_path, '-vf', drawtext,
-        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
-        '-map', '0:v:0', '-map', '0:a:0?', output_path, '-y'
-    ]
+async def add_text_watermark(input_path, output_path, text, position, size_percent):
+    """افزودن واترمارک متنی متحرک و محوشونده به ویدیو (با تکرار حلقوی)."""
     
-    try:
-        total_duration = await get_video_duration(input_path)
-        if message and start_time:
-            try:
-                await message.edit("⚙️ در حال افزودن واترمارک...")
-            except MessageNotModified:
-                pass  # ignore
+    # 1. تنظیمات زمان‌بندی انیمیشن (ورود 2، مکث 4، خروج 3)
+    MOVE_IN_DURATION = 2  # مدت زمان ورود از چپ (ثانیه)
+    PAUSE_DURATION = 4    # مدت زمان توقف در موقعیت نهایی (ثانیه)
+    MOVE_OUT_DURATION = 3 # مدت زمان خروج به پایین-راست و محو شدن (ثانیه)
+    CYCLE_DURATION = MOVE_IN_DURATION + PAUSE_DURATION + MOVE_OUT_DURATION # مدت کل یک چرخه (9 ثانیه)
 
-        # شروع progress loop
-        progress_loop = None
-        if message and total_duration:
-            progress_loop = asyncio.create_task(update_watermark_progress(message, start_time, total_duration))
+    # 2. محاسبه مختصات نهایی در مرحله مکث (وسط-بالا)
+    FINAL_X_PAUSE = "(main_w-text_w)/2" # افقی: وسط
+    FINAL_Y_PAUSE = "20" # عمودی: 20 پیکسل از بالا
 
-        process = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
+    # 3. محاسبه مختصات نهایی برای خروج (پایین-راست)
+    FINAL_X_OUT = "main_w-text_w-20" # افقی: 20 پیکسل از راست
+    FINAL_Y_OUT = "main_h-text_h-20" # عمودی: 20 پیکسل از پایین
 
-        stdout, stderr = await process.communicate()
+    # 4. تعریف انیمیشن (Expressionها)
+    # متغیر t با mod(t, CYCLE_DURATION) جایگزین می‌شود تا حلقه تکرار ایجاد شود.
 
-        # فیکس: cancel loop بعد از FFmpeg
-        if progress_loop:
-            progress_loop.cancel()
-            try:
-                await progress_loop
-            except asyncio.CancelledError:
-                pass
-
-        if process.returncode != 0:
-            error_output = stderr.decode('utf-8', errors='ignore')
-            print(f"FFmpeg Text Error Full: {error_output}")
-            raise Exception(f"FFmpeg failed (Text): {error_output[:300]}...")
-
-        if message:
-            await message.edit("✅ واترمارک متنی اضافه شد!")
-
-    except Exception as e:
-        raise Exception(f"Text watermark error: {e}")
-
-async def add_image_watermark(input_path, output_path, image_path, position, size_percent, message: Message = None, start_time: float = None):
-    """افزودن واترمارک تصویری (progress time-based)."""
-    if not os.path.exists(input_path) or not os.path.exists(image_path):
-        raise Exception(f"فایل‌ها پیدا نشد: ویدیو={input_path}, تصویر={image_path}")
-
-    position_map = {
-        "top_right": "main_w-overlay_w-20:20",
-        "top_center": "(main_w-overlay_w)/2:20",
-        "top_left": "20:20",
-        "center_right": "main_w-overlay_w-20:(main_h-overlay_h)/2",
-        "center": "(main_w-overlay_w)/2:(main_h-overlay_h)/2",
-        "center_left": "20:(main_h-overlay_h)/2",
-        "bottom_right": "main_w-overlay_w-20:main_h-overlay_h-20",
-        "bottom_center": "(main_w-overlay_w)/2:main_h-overlay_h-20",
-        "bottom_left": "20:main_h-overlay_h-20"
-    }
-
-    # ساده filter: scale + format alpha + overlay
-    filter_complex = (
-        f"[1:v]scale=iw*{size_percent}/100:ih*{size_percent}/100,format=argb[wm];"
-        f"[0:v][wm]overlay={position_map[position]}"
+    # A. موقعیت X (ورود از چپ، توقف، خروج به راست)
+    X_EXPRESSION = (
+        f"if(lt(t,{MOVE_IN_DURATION}), " 
+            f"({FINAL_X_PAUSE}) * t / {MOVE_IN_DURATION} - text_w * (1 - t / {MOVE_IN_DURATION}), "
+        f"if(lt(t,{MOVE_IN_DURATION + PAUSE_DURATION}), " 
+            f"{FINAL_X_PAUSE}, "
+            f"{FINAL_X_PAUSE} + ({FINAL_X_OUT} - {FINAL_X_PAUSE}) * (t - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
+        ")"
     )
 
-    cmd = [
-        'ffmpeg', '-i', input_path, '-i', image_path,
-        '-filter_complex', filter_complex,
-        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
-        '-map', '0:v:0', '-map', '0:a:0?', '-movflags', '+faststart', output_path, '-y'
-    ]
+    # B. موقعیت Y (توقف، خروج به پایین)
+    Y_EXPRESSION = (
+        f"if(lt(t,{MOVE_IN_DURATION + PAUSE_DURATION}), " 
+            f"{FINAL_Y_PAUSE}, "
+            f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * (t - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
+    )
+    
+    # C. محو شدن Alpha (ورود تدریجی، ثابت، خروج تدریجی)
+    ALPHA_EXPRESSION = (
+        f"if(lt(t,{MOVE_IN_DURATION}), " 
+            f"0.8 * t / {MOVE_IN_DURATION}, "
+        f"if(lt(t,{MOVE_IN_DURATION + PAUSE_DURATION}), "
+            f"0.8, "
+            f"0.8 * (1 - (t - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION}))"
+        ")"
+    )
 
-    print(f"Debug FFmpeg Cmd: {' '.join(cmd)}")
+    # 5. تعریف فیلتر Drawtext با اعمال حلقه تکرار
+    safe_text = shlex.quote(text)
+    
+    drawtext_loop = (
+        f"drawtext=text={safe_text}:fontcolor=white:" 
+        f"fontsize=h*{size_percent}/100:shadowcolor=black@0.4:shadowx=2:shadowy=2:"
+        f"x='{X_EXPRESSION.replace('t', f'mod(t,{CYCLE_DURATION})')}':"
+        f"y='{Y_EXPRESSION.replace('t', f'mod(t,{CYCLE_DURATION})')}':"
+        f"alpha='{ALPHA_EXPRESSION.replace('t', f'mod(t,{CYCLE_DURATION})')}'" 
+    )
 
+    # 6. ساخت دستور FFmpeg
+    cmd = (
+        f"ffmpeg -i \"{input_path}\" -vf \"{drawtext_loop}\" "
+        f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "
+        f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
+    )
+    
+    # 7. اجرای ایمن FFmpeg
     try:
-        total_duration = await get_video_duration(input_path)
-        if message and start_time:
-            try:
-                await message.edit("⚙️ در حال افزودن واترمارک...")
-            except MessageNotModified:
-                pass  # ignore
-
-        # شروع progress loop
-        progress_loop = None
-        if message and total_duration:
-            progress_loop = asyncio.create_task(update_watermark_progress(message, start_time, total_duration))
-
         process = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            *shlex.split(cmd), 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE
         )
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode != 0:
+            error_output = stderr.decode()
+            raise Exception(f"FFmpeg failed: {error_output}") 
 
+    except FileNotFoundError:
+        raise FileNotFoundError("FFmpeg command not found. Please install FFmpeg.")
+    except Exception as e:
+        raise Exception(f"Error during animated text watermark processing: {e}")
+
+async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
+    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با تکرار حلقوی)."""
+    
+    # 1. تنظیمات زمان‌بندی انیمیشن (ورود 2، مکث 4، خروج 3)
+    MOVE_IN_DURATION = 2  # مدت زمان ورود از چپ (ثانیه)
+    PAUSE_DURATION = 4    # مدت زمان توقف در موقعیت نهایی (ثانیه)
+    MOVE_OUT_DURATION = 3 # مدت زمان خروج به پایین-راست و محو شدن (ثانیه)
+    CYCLE_DURATION = MOVE_IN_DURATION + PAUSE_DURATION + MOVE_OUT_DURATION # مدت کل یک چرخه (9 ثانیه)
+
+    # 2. محاسبه مختصات نهایی در مرحله مکث (وسط-بالا)
+    FINAL_X_PAUSE = "(main_w-overlay_w)/2" # افقی: وسط
+    FINAL_Y_PAUSE = "20" # عمودی: 20 پیکسل از بالا
+
+    # 3. محاسبه مختصات نهایی برای خروج (پایین-راست)
+    FINAL_X_OUT = "main_w-overlay_w-20" # افقی: 20 پیکسل از راست
+    FINAL_Y_OUT = "main_h-overlay_h-20" # عمودی: 20 پیکسل از پایین
+
+    # 4. تعریف انیمیشن (Expressionها)
+    X_EXPRESSION = (
+        f"if(lt(t,{MOVE_IN_DURATION}), " 
+            f"({FINAL_X_PAUSE}) * t / {MOVE_IN_DURATION} - overlay_w * (1 - t / {MOVE_IN_DURATION}), "
+        f"if(lt(t,{MOVE_IN_DURATION + PAUSE_DURATION}), " 
+            f"{FINAL_X_PAUSE}, "
+            f"{FINAL_X_PAUSE} + ({FINAL_X_OUT} - {FINAL_X_PAUSE}) * (t - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
+        ")"
+    )
+
+    Y_EXPRESSION = (
+        f"if(lt(t,{MOVE_IN_DURATION + PAUSE_DURATION}), " 
+            f"{FINAL_Y_PAUSE}, "
+            f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * (t - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
+    )
+    
+    ALPHA_EXPRESSION = (
+        f"if(lt(t,{MOVE_IN_DURATION}), " 
+            f"t / {MOVE_IN_DURATION}, "
+        f"if(lt(t,{MOVE_IN_DURATION + PAUSE_DURATION}), " 
+            f"1, "
+            f"(1 - (t - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION}))"
+        ")"
+    )
+
+    # 5. ساخت فیلتر `filter_complex` با اعمال حلقه تکرار
+    filter_complex = (
+        f"[0:v]scale=iw*sar:ih,setsar=1[v];"
+        f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];" 
+        
+        # اعمال آلفا بر اساس زمان
+        f"[wm]colorchannelmixer=aa='{ALPHA_EXPRESSION.replace('t', f'mod(t,{CYCLE_DURATION})')}'[wma];" 
+        
+        # اعمال انیمیشن X و Y در فیلتر overlay
+        f"[v][wma]overlay=x='{X_EXPRESSION.replace('t', f'mod(t,{CYCLE_DURATION})')}':"
+        f"y='{Y_EXPRESSION.replace('t', f'mod(t,{CYCLE_DURATION})')}':"
+        f"eof_action=repeat[ov];" 
+        f"[ov]format=yuv420p[outv]" 
+    )
+
+    # 6. ساخت دستور FFmpeg
+    cmd = (
+        f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
+        f"-filter_complex \"{filter_complex}\" "
+        f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -vsync 1 "
+        f"-profile:v high -level:v 4.0 " 
+        f"-g 30 -keyint_min 1 -movflags +faststart "
+        f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
+    )
+    
+    # 7. اجرای ایمن FFmpeg
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *shlex.split(cmd), 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE
+        )
         stdout, stderr = await process.communicate()
 
-        # فیکس: cancel loop بعد از FFmpeg
-        if progress_loop:
-            progress_loop.cancel()
-            try:
-                await progress_loop
-            except asyncio.CancelledError:
-                pass
-
         if process.returncode != 0:
-            error_output = stderr.decode('utf-8', errors='ignore')
-            print(f"FFmpeg Image Error Full: {error_output}")
-            raise Exception(f"FFmpeg failed (Image): {error_output[:300]}...")
+            error_output = stderr.decode()
+            raise Exception(f"FFmpeg failed: {error_output[:200]}...")
 
-        if message:
-            await message.edit("✅ واترمارک تصویری اضافه شد!")
-
+    except FileNotFoundError:
+        raise FileNotFoundError("FFmpeg command not found. Please install FFmpeg.")
     except Exception as e:
-        raise Exception(f"Image watermark error: {e}")
+        raise Exception(f"Error during animated image watermark processing: {e}")
