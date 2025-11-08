@@ -156,8 +156,8 @@ async def process_image_watermark(client, message: Message):
         await msg.delete()
 
     except Exception as e:
-        print(f"Image Watermark Error: {e}")
-        await msg.edit(f"❌ یک خطا رخ داد: {e}")
+        print(f"Full Image Watermark Error: {str(e)}")  # لاگ کامل
+        await msg.edit(f"❌ یک خطا رخ داد: {str(e)}")
 
     finally:
         if input_path and os.path.exists(input_path): os.remove(input_path)
