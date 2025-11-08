@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (منطق اصلی FFmpeg - فیکس ۱۰۰%: ساده filter overlay PNG alpha, progress from stderr)
+# نام فایل: helper/watermark.py (منطق اصلی FFmpeg - فیکس ۱۰۰%: progress time-based تخمینی, پیام مستقیم)
 import asyncio
 import os
 import subprocess
@@ -9,7 +9,7 @@ from pyrogram.types import Message
 from helper.progress import progress_bar  # import صریح
 
 async def get_video_duration(input_path):
-    """استخراج duration ویدیو با ffprobe (به میلی‌ثانیه)."""
+    """استخراج duration ویدیو با ffprobe (به ثانیه)."""
     try:
         cmd = [
             'ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
@@ -20,40 +20,24 @@ async def get_video_duration(input_path):
         )
         stdout, _ = await process.communicate()
         data = json.loads(stdout.decode())
-        duration = float(data['format']['duration']) * 1000  # به ms
+        duration = float(data['format']['duration'])  # به ثانیه
         return duration
     except Exception as e:
         print(f"Duration fetch error: {e}")
         return None
 
-async def read_progress_async(progress_pipe, total_ms, message, start_time):
-    """خواندن progress از pipe async."""
-    current_ms = 0
-    last_update = time.time()
-    try:
-        while True:
-            line = await progress_pipe.readline()
-            if not line:
-                break
-            line_str = line.decode().strip()
-            print(f"Debug Progress: {line_str}")
-            if line_str.startswith('out_time_ms='):
-                try:
-                    current_ms = float(line_str.split('=')[1])
-                    now = time.time()
-                    if (now - last_update) >= 5 or current_ms >= total_ms:
-                        await progress_bar(current_ms, total_ms, message, start_time, "watermark")
-                        last_update = now
-                except ValueError:
-                    pass
-        # Final 100%
-        if total_ms:
-            await progress_bar(total_ms, total_ms, message, start_time, "watermark")
-    except Exception as e:
-        print(f"Progress read error: {e}")
+async def update_watermark_progress(message, start_time, total_duration):
+    """update progress هر 5s بر اساس زمان گذشته (تخمینی linear)."""
+    now = time.time()
+    elapsed = now - start_time
+    percentage = min((elapsed / total_duration) * 100, 100) if total_duration else 0
+    await progress_bar(percentage * total_duration / 100 * 10, total_duration * 10, message, start_time, "watermark")  # Fake current for bar
+    if percentage < 100:
+        asyncio.create_task(asyncio.sleep(5))
+        await update_watermark_progress(message, start_time, total_duration)
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent, message: Message = None, start_time: float = None):
-    """افزودن واترمارک متنی."""
+    """افزودن واترمارک متنی (progress time-based)."""
     if not os.path.exists(input_path):
         raise Exception(f"فایل ورودی پیدا نشد: {input_path}")
 
@@ -79,36 +63,30 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     cmd = [
         'ffmpeg', '-i', input_path, '-vf', drawtext,
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
-        '-map', '0:v:0', '-map', '0:a:0?', output_path, '-y',
-        '-progress', 'pipe:1'
-    ]
+        '-map', '0:v:0', '-map', '0:a:0?', output_path, '-y'
+    ]  # حذف -progress pipe:1
     
     try:
-        total_ms = await get_video_duration(input_path)
+        total_duration = await get_video_duration(input_path)
         if message and start_time:
-            await message.edit("⚙️ در حال افزودن واترمارک...")  # پیام اولیه
+            await message.edit("⚙️ در حال افزودن واترمارک...")  # پیام مستقیم
+
+        # شروع progress loop
+        progress_loop = None
+        if message and total_duration:
+            progress_loop = asyncio.create_task(update_watermark_progress(message, start_time, total_duration))
 
         process = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
 
-        # Progress از stdout
-        progress_task = asyncio.create_task(read_progress_async(process.stdout, total_ms, message, start_time)) if message and total_ms else None
+        stdout, stderr = await process.communicate()
 
-        # Collect stderr
-        stderr_data = b''
-        while True:
-            chunk = await process.stderr.read(1024)
-            if not chunk:
-                break
-            stderr_data += chunk
-
-        await process.wait()
-        if progress_task:
-            await progress_task
+        if progress_loop:
+            await progress_loop  # منتظر loop
 
         if process.returncode != 0:
-            error_output = stderr_data.decode('utf-8', errors='ignore')
+            error_output = stderr.decode('utf-8', errors='ignore')
             print(f"FFmpeg Text Error Full: {error_output}")
             raise Exception(f"FFmpeg failed (Text): {error_output[:300]}...")
 
@@ -119,63 +97,58 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         raise Exception(f"Text watermark error: {e}")
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent, message: Message = None, start_time: float = None):
-    """افزودن واترمارک تصویری (فیکس ۱۰۰%: ساده overlay با alpha handling)."""
+    """افزودن واترمارک تصویری (progress time-based)."""
     if not os.path.exists(input_path) or not os.path.exists(image_path):
         raise Exception(f"فایل‌ها پیدا نشد: ویدیو={input_path}, تصویر={image_path}")
 
     position_map = {
-        "top_right": "W-w-20:20",
-        "top_center": "(W-w)/2:20",
+        "top_right": "main_w-overlay_w-20:20",
+        "top_center": "(main_w-overlay_w)/2:20",
         "top_left": "20:20",
-        "center_right": "W-w-20:(H-h)/2",
-        "center": "(W-w)/2:(H-h)/2",
-        "center_left": "20:(H-h)/2",
-        "bottom_right": "W-w-20:H-h-20",
-        "bottom_center": "(W-w)/2:H-h-20",
-        "bottom_left": "20:H-h-20"
+        "center_right": "main_w-overlay_w-20:(main_h-overlay_h)/2",
+        "center": "(main_w-overlay_w)/2:(main_h-overlay_h)/2",
+        "center_left": "20:(main_h-overlay_h)/2",
+        "bottom_right": "main_w-overlay_w-20:main_h-overlay_h-20",
+        "bottom_center": "(main_w-overlay_w)/2:main_h-overlay_h-20",
+        "bottom_left": "20:main_h-overlay_h-20"
     }
 
-    # فیکس ساده بر اساس داکیومنت: format=argb برای PNG, overlay مستقیم
+    # ساده filter: scale + format alpha + overlay
     filter_complex = (
         f"[1:v]scale=iw*{size_percent}/100:ih*{size_percent}/100,format=argb[wm];"
-        f"[0:v][wm]overlay={position_map[position]}[outv]"
+        f"[0:v][wm]overlay={position_map[position]}"
     )
 
     cmd = [
         'ffmpeg', '-i', input_path, '-i', image_path,
         '-filter_complex', filter_complex,
-        '-map', '[outv]', '-map', '0:a:0?',
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
-        '-movflags', '+faststart', output_path, '-y',
-        '-progress', 'pipe:1'
-    ]
+        '-map', '0:v:0', '-map', '0:a:0?', '-movflags', '+faststart', output_path, '-y'
+    ]  # حذف pipe, map [outv] چون overlay مستقیم
 
     print(f"Debug FFmpeg Cmd: {' '.join(cmd)}")
 
     try:
-        total_ms = await get_video_duration(input_path)
+        total_duration = await get_video_duration(input_path)
         if message and start_time:
-            await message.edit("⚙️ در حال افزودن واترمارک...")  # پیام اولیه – نه آماده‌سازی
+            await message.edit("⚙️ در حال افزودن واترمارک...")  # مستقیم, بدون آماده‌سازی
+
+        # شروع progress loop
+        progress_loop = None
+        if message and total_duration:
+            progress_loop = asyncio.create_task(update_watermark_progress(message, start_time, total_duration))
 
         process = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
 
-        progress_task = asyncio.create_task(read_progress_async(process.stdout, total_ms, message, start_time)) if message and total_ms else None
+        stdout, stderr = await process.communicate()
 
-        stderr_data = b''
-        while True:
-            chunk = await process.stderr.read(1024)
-            if not chunk:
-                break
-            stderr_data += chunk
-
-        await process.wait()
-        if progress_task:
-            await progress_task
+        if progress_loop:
+            await progress_loop
 
         if process.returncode != 0:
-            error_output = stderr_data.decode('utf-8', errors='ignore')
+            error_output = stderr.decode('utf-8', errors='ignore')
             print(f"FFmpeg Image Error Full: {error_output}")
             raise Exception(f"FFmpeg failed (Image): {error_output[:300]}...")
 
