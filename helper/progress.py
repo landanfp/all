@@ -1,7 +1,7 @@
 # نام فایل: helper/progress.py (ابزارهای نوار پیشرفت)
 import time
 from pyrogram.types import Message
-import asyncio  # برای threadsafe
+import asyncio  # برای threadsafe (اگر لازم شد)
 
 async def progress_bar(current, total, message: Message, start, stage="در حال پردازش"):
     """آپدیت پیام در حین دانلود/آپلود/پردازش برای نمایش پیشرفت."""
@@ -11,9 +11,11 @@ async def progress_bar(current, total, message: Message, start, stage="در حا
     if diff == 0:
         diff = 1
 
-    percentage = current * 100 / total if total else 0
+    percentage = current * 100 / total if total else (now - start) / 30 * 100  # Fallback تخمینی (فرض 30s total)
+    if percentage > 100:
+        percentage = 100
     speed = current / diff if diff > 0 else 0
-    eta = (total - current) / speed if speed > 0 else 0
+    eta = (total - current) / speed if speed > 0 and total else (30 - (now - start))  # Fallback ETA
 
     filled_blocks = int(percentage // 10)
     empty_blocks = 10 - filled_blocks
@@ -23,20 +25,20 @@ async def progress_bar(current, total, message: Message, start, stage="در حا
         # فرمت درخواستی
         progress_text = (
             f"{percentage:.1f}% {bar}\n"
-            f"مدت زمان باقی تا اتمام: **{int(eta)}s**"
+            f"مدت زمان باقی تا اتمام: **{max(0, int(eta))}s**"
         )
     else:
         progress_text = (
             f"**مرحله {stage}**: {bar} **{percentage:.1f}%**\n"
             f"📥/📤 داده: **{human_readable_size(current)}** از **{human_readable_size(total)}**\n"
             f"⚡ سرعت: **{human_readable_size(speed)}/s**\n"
-            f"⏱️ زمان تخمینی: **{int(eta)}s**"
+            f"⏱️ زمان تخمینی: **{max(0, int(eta))}s**"
         )
 
     # Flood wait prevention
     if int(now - start) % 5 == 0 or percentage >= 100 or percentage == 0:
         try:
-            await message.edit_text(progress_text)  # edit_text برای safety
+            await message.edit(progress_text)  # فیکس: edit نه edit_text
         except Exception as e:
             print(f"Edit error: {e}")
             pass
