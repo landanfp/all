@@ -1,11 +1,10 @@
-# نام فایل: helper/watermark.py (منطق اصلی FFmpeg - فیکس progress و overlay)
+# نام فایل: helper/watermark.py (منطق اصلی FFmpeg - فیکس async progress بدون thread)
 import asyncio
 import os
 import subprocess
 import shlex
 import json
 import time
-import threading
 from pyrogram.types import Message
 
 async def get_video_duration(input_path):
@@ -16,7 +15,7 @@ async def get_video_duration(input_path):
             '-of', 'json', input_path
         ]
         process = await asyncio.create_subprocess_exec(
-            *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, _ = await process.communicate()
         data = json.loads(stdout.decode())
@@ -26,38 +25,34 @@ async def get_video_duration(input_path):
         print(f"Duration fetch error: {e}")
         return None
 
-def read_progress_thread(pipe, total_ms, message, start_time, loop):
-    """خواندن progress در thread جدا."""
+async def read_progress_async(stdout, total_ms, message, start_time):
+    """خواندن progress به صورت async."""
     current_ms = 0
     last_update = time.time()
-    while True:
-        line = pipe.readline()
-        if not line:
-            break
-        line_str = line.decode().strip()
-        if line_str.startswith('out_time_ms='):
-            try:
-                current_ms = float(line_str.split('=')[1])
-                now = time.time()
-                if (now - last_update) >= 5 or current_ms >= total_ms:
-                    # Safe call to async from thread
-                    future = asyncio.run_coroutine_threadsafe(
-                        progress_bar(current_ms, total_ms, message, start_time, "watermark"), 
-                        loop
-                    )
-                    future.result(timeout=2)  # Wait short
-                    last_update = now
-            except ValueError:
-                pass
-    # Final 100%
-    if total_ms:
-        asyncio.run_coroutine_threadsafe(
-            progress_bar(total_ms, total_ms, message, start_time, "watermark"), 
-            loop
-        ).result(timeout=1)
+    try:
+        while True:
+            line = await stdout.readline()
+            if not line:
+                break
+            line_str = line.decode().strip()
+            print(f"Debug Progress: {line_str}")  # لاگ debug
+            if line_str.startswith('out_time_ms='):
+                try:
+                    current_ms = float(line_str.split('=')[1])
+                    now = time.time()
+                    if (now - last_update) >= 5 or current_ms >= total_ms:
+                        await progress_bar(current_ms, total_ms, message, start_time, "watermark")
+                        last_update = now
+                except ValueError:
+                    pass
+        # Final 100%
+        if total_ms:
+            await progress_bar(total_ms, total_ms, message, start_time, "watermark")
+    except Exception as e:
+        print(f"Progress read error: {e}")
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent, message: Message = None, start_time: float = None):
-    """افزودن واترمارک متنی."""
+    """افزودن واترمارک متنی (async progress)."""
     if not os.path.exists(input_path):
         raise Exception(f"فایل ورودی پیدا نشد: {input_path}")
 
@@ -86,7 +81,6 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         '-progress', 'pipe:1'
     ]
     
-    loop = asyncio.get_event_loop()
     try:
         total_ms = await get_video_duration(input_path)
         if message:
@@ -96,25 +90,26 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
 
-        # Progress thread
+        # Async progress task
+        progress_task = None
         if message and total_ms:
-            progress_thread = threading.Thread(
-                target=read_progress_thread, args=(process.stdout, total_ms, message, start_time, loop)
-            )
-            progress_thread.daemon = True
-            progress_thread.start()
+            progress_task = asyncio.create_task(read_progress_async(process.stdout, total_ms, message, start_time))
 
-        # Collect stderr
+        # Collect stderr async
         stderr = b''
-        while True:
-            line = await process.stderr.read(1024)
-            if not line:
-                break
-            stderr += line
+        try:
+            while True:
+                chunk = await process.stderr.read(1024)
+                if not chunk:
+                    break
+                stderr += chunk
+        except Exception:
+            pass  # stderr ممکنه close بشه
 
         await process.wait()
-        if message and total_ms:
-            progress_thread.join(timeout=5)
+
+        if progress_task:
+            await progress_task  # منتظر progress تموم بشه
 
         if process.returncode != 0:
             error_output = stderr.decode('utf-8', errors='ignore')
@@ -128,7 +123,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         raise Exception(f"Text watermark error: {e}")
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent, message: Message = None, start_time: float = None):
-    """افزودن واترمارک تصویری (فیکس overlay syntax)."""
+    """افزودن واترمارک تصویری (async progress)."""
     if not os.path.exists(input_path) or not os.path.exists(image_path):
         raise Exception(f"فایل‌ها پیدا نشد: ویدیو={input_path}, تصویر={image_path}")
 
@@ -147,8 +142,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     # فیکس filter: scale + overlay + map outv
     filter_complex = (
         f"[1:v]scale=iw*{size_percent/100}:-1[wm];"
-        f"[0:v][wm]overlay={position_map[position]}[outv];"
-        f"[outv]format=yuv420p"
+        f"[0:v][wm]overlay={position_map[position]}[outv]"
     )
 
     cmd = [
@@ -160,7 +154,6 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         '-progress', 'pipe:1'
     ]
 
-    loop = asyncio.get_event_loop()
     try:
         total_ms = await get_video_duration(input_path)
         if message:
@@ -170,23 +163,24 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
 
+        progress_task = None
         if message and total_ms:
-            progress_thread = threading.Thread(
-                target=read_progress_thread, args=(process.stdout, total_ms, message, start_time, loop)
-            )
-            progress_thread.daemon = True
-            progress_thread.start()
+            progress_task = asyncio.create_task(read_progress_async(process.stdout, total_ms, message, start_time))
 
         stderr = b''
-        while True:
-            line = await process.stderr.read(1024)
-            if not line:
-                break
-            stderr += line
+        try:
+            while True:
+                chunk = await process.stderr.read(1024)
+                if not chunk:
+                    break
+                stderr += chunk
+        except Exception:
+            pass
 
         await process.wait()
-        if message and total_ms:
-            progress_thread.join(timeout=5)
+
+        if progress_task:
+            await progress_task
 
         if process.returncode != 0:
             error_output = stderr.decode('utf-8', errors='ignore')
