@@ -3,7 +3,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from helper.state import set_state, get_state, clear_state
 from helper.watermark import add_text_watermark
-from helper.progress import progress_bar
+from helper.progress import progress_bar, format_time_progress
 import os
 import time
 
@@ -95,6 +95,8 @@ async def handle_video(client, message: Message):
         clear_state(user_id)
         return
 
+    duration = message.video.duration # مدت زمان ویدیو را بگیرید
+
     msg = await message.reply("⏳ در حال دانلود ویدیو...")
 
     # استفاده از یک نام محلی برای دانلود
@@ -109,7 +111,8 @@ async def handle_video(client, message: Message):
 
         # مرحله افزودن واترمارک
         await msg.edit("⚙️ در حال افزودن واترمارک...")
-        await add_text_watermark(input_path, output_file, text, position, size) # استفاده از مسیر واقعی
+        # ارسال message و duration برای نمایش پیشرفت
+        await add_text_watermark(input_path, output_file, text, position, size, message=msg, duration=duration) 
         
         if not os.path.exists(output_file):
              # اگر FFmpeg شکست خورد، باید یک Exception را Raise کنیم تا به بلوک except برود
