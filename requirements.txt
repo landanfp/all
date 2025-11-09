@@ -10,3 +10,4 @@ aiohttp
 uvicorn
 fastapi
 flask
+ffmpeg-python 
