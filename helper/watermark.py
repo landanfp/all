@@ -95,7 +95,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
              raise Exception(f"Error during animated text watermark processing: {e}")
 
 # ----------------------------------------------------------------------------------
-## تابع واترمارک تصویری (اصلاح شده)
+## تابع واترمارک تصویری (اصلاح نهایی)
 # ----------------------------------------------------------------------------------
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
@@ -138,20 +138,18 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         ")"
     )
 
-    # ساخت فیلتر `filter_complex` اصلاح شده
+    # 5. ساخت فیلتر `filter_complex` (استفاده از سینگل کوتیشن‌ها برای اطمینان از خوانده شدن عبارت‌های ریاضی)
     filter_complex = (
         f"[0:v]scale=iw*sar:ih,setsar=1,split[v_main][v_canvas];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"
         f"[v_canvas]colorchannelmixer=aa=0[canvas];"
-        # FIX: حذف کوتیشن‌های داخلی برای رفع خطای نحوی FFmpeg
-        f"[canvas][wm]overlay=x={X_EXPRESSION}:y={Y_EXPRESSION}:eof_action=repeat[moved_wm];"
-        # FIX: حذف کوتیشن‌های داخلی برای رفع خطای نحوی FFmpeg
-        f"[moved_wm]colorchannelmixer=aa={ALPHA_EXPRESSION}[faded_wm];"
+        f"[canvas][wm]overlay=x='{X_EXPRESSION}':y='{Y_EXPRESSION}':eof_action=repeat[moved_wm];"
+        f"[moved_wm]colorchannelmixer=aa='{ALPHA_EXPRESSION}'[faded_wm];"
         f"[v_main][faded_wm]overlay[ov];"
         f"[ov]format=yuv420p[outv]"
     )
 
-    # ساخت دستور FFmpeg
+    # 6. ساخت دستور FFmpeg
     cmd = (
         f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
         f"-filter_complex \"{filter_complex}\" "
@@ -161,7 +159,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
     )
     
-    # اجرای ایمن FFmpeg (با گزارش خطای بهبود یافته)
+    # 7. اجرای ایمن FFmpeg (با گزارش خطای بهبود یافته)
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
@@ -173,7 +171,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         if process.returncode != 0:
             error_output = stderr.decode()
             error_lines = error_output.strip().splitlines()
-            short_error = "\n".join(error_lines[-5:]) # دریافت ۵ خط آخر
+            short_error = "\n".join(error_lines[-5:])
             if not short_error:
                 short_error = error_output[:250] 
             raise Exception(f"FFmpeg failed:\n{short_error}...")
