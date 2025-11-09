@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با Alpha Merge)
+# نام فایل: helper/watermark.py (نسخه نهایی با لاگ دستورات)
 import asyncio
 import os
 import subprocess
@@ -8,7 +8,7 @@ import shlex
 T = "t" # متغیر زمان اصلی در FFmpeg
 
 # ----------------------------------------------------------------------------------
-## توابع واترمارک متنی و تشخیصی (بدون تغییر)
+## تابع واترمارک متنی
 # ----------------------------------------------------------------------------------
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
@@ -59,6 +59,9 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "
         f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
     )
+    
+    # 🌟 لاگ دستور کامل FFmpeg
+    print(f"--- FFmpeg CMD (Text Watermark):\n{cmd}\n---")
     
     # اجرای ایمن FFmpeg
     try:
@@ -117,31 +120,29 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"{FINAL_Y_PAUSE}+({FINAL_Y_OUT}-{FINAL_Y_PAUSE})*({MOD_T}-{MOVE_IN_DURATION+PAUSE_DURATION})/{MOVE_OUT_DURATION})"
     )
     
-    # این عبارت برای فیلتر geq استفاده می‌شود
     ALPHA_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}),0.8*{MOD_T}/{MOVE_IN_DURATION},"
         f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),0.8,0.8*(1-({MOD_T}-{MOVE_IN_DURATION+PAUSE_DURATION})/{MOVE_OUT_DURATION})))"
     )
 
-    # 5. ساخت فیلتر `filter_complex` با استفاده از alphaextract و geq (با کوتیشن سینگل)
+    # 5. ساخت فیلتر `filter_complex` 
     filter_complex = (
         f"[0:v]scale=iw*sar:ih,setsar=1[v_main];"
-        f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm_scaled];" # تصویر واترمارک با شفافیت
+        f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm_scaled];" 
         
-        # 1. اعمال انیمیشن X/Y به واترمارک (شفافیت ثابت 1)
+        # 1. اعمال انیمیشن X/Y با کوتیشن سینگل
         f"[v_main][wm_scaled]overlay=x='{X_EXPRESSION}':y='{Y_EXPRESSION}':eof_action=repeat:shortest=1[moved_wm];"
         
-        # 2. استخراج کانال شفافیت (A) از تصویر متحرک شده
+        # 2. استخراج کانال شفافیت
         f"[moved_wm]alphaextract[alpha_channel];"
         
-        # 3. اعمال عبارت محو شدن (fading) روی کانال شفافیت (Luminance) با فیلتر geq
-        # ما لومینانس (LUM) را با عبارت آلفای زمان‌بندی شده ضرب در 255 تنظیم می‌کنیم.
-        f"[alpha_channel]geq=lum='{ALPHA_EXPRESSION}*255':cr=128:cb=128[faded_alpha];"
+        # 3. FIX: حذف کوتیشن سینگل از اطراف عبارت LUM در فیلتر GEQ
+        f"[alpha_channel]geq=lum={ALPHA_EXPRESSION}*255:cr=128:cb=128[faded_alpha];"
         
-        # 4. برگرداندن کانال شفافیت جدید به تصویر متحرک شده
+        # 4. برگرداندن کانال شفافیت جدید
         f"[moved_wm][faded_alpha]alphamerge[faded_wm_final];"
 
-        # 5. ادغام واترمارک نهایی با ویدیو اصلی
+        # 5. ادغام واترمارک نهایی
         f"[v_main][faded_wm_final]overlay[ov];"
         f"[ov]format=yuv420p[outv]"
     )
@@ -156,6 +157,9 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
     )
     
+    # 🌟 لاگ دستور کامل FFmpeg
+    print(f"--- FFmpeg CMD (Image Watermark):\n{cmd}\n---")
+    
     # 7. اجرای ایمن FFmpeg
     try:
         process = await asyncio.create_subprocess_exec(
@@ -165,7 +169,6 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         )
         stdout, stderr = await process.communicate()
 
-        # بهبود گزارش خطا
         if process.returncode != 0:
             error_output = stderr.decode()
             error_lines = error_output.strip().splitlines()
