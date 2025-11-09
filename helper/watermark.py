@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی و کامل)
+# نام فایل: helper/watermark.py (نسخه نهایی، شامل ابزار Version)
 import asyncio
 import os
 import subprocess
@@ -26,29 +26,20 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     FINAL_X_OUT = FINAL_X_PAUSE 
     FINAL_Y_OUT = "main_h-text_h-20" 
 
-    # تعریف انیمیشن (Expressionها)
+    # تعریف انیمیشن (Expressionهای فشرده)
     X_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
-            f"({FINAL_X_PAUSE}) * {MOD_T} / {MOVE_IN_DURATION} - text_w * (1 - {MOD_T} / {MOVE_IN_DURATION}), "
-        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
-            f"{FINAL_X_PAUSE}, "
-            f"{FINAL_X_OUT})" 
-        ")"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION}),({FINAL_X_PAUSE})*{MOD_T}/{MOVE_IN_DURATION}-text_w*(1-{MOD_T}/{MOVE_IN_DURATION})," 
+        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),{FINAL_X_PAUSE},{FINAL_X_OUT}))"
     )
 
     Y_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
-            f"{FINAL_Y_PAUSE}, "
-            f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),{FINAL_Y_PAUSE},"
+        f"{FINAL_Y_PAUSE}+({FINAL_Y_OUT}-{FINAL_Y_PAUSE})*({MOD_T}-{MOVE_IN_DURATION+PAUSE_DURATION})/{MOVE_OUT_DURATION})"
     )
     
     ALPHA_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
-            f"0.8 * {MOD_T} / {MOVE_IN_DURATION}, "
-        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), "
-            f"0.8, "
-            f"0.8 * (1 - ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION}))"
-        ")"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION}),0.8*{MOD_T}/{MOVE_IN_DURATION},"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),0.8,0.8*(1-({MOD_T}-{MOVE_IN_DURATION+PAUSE_DURATION})/{MOVE_OUT_DURATION})))"
     )
 
     # تعریف فیلتر Drawtext
@@ -114,39 +105,29 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     FINAL_X_OUT = FINAL_X_PAUSE
     FINAL_Y_OUT = "main_h-overlay_h-20" 
 
-    # تعریف انیمیشن (Expressionها)
+    # تعریف انیمیشن (Expressionهای فشرده)
     X_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
-            f"({FINAL_X_PAUSE}) * {MOD_T} / {MOVE_IN_DURATION} - overlay_w * (1 - {MOD_T} / {MOVE_IN_DURATION}), "
-        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
-            f"{FINAL_X_PAUSE}, "
-            f"{FINAL_X_OUT})"
-        ")"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION}),({FINAL_X_PAUSE})*{MOD_T}/{MOVE_IN_DURATION}-overlay_w*(1-{MOD_T}/{MOVE_IN_DURATION}),"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),{FINAL_X_PAUSE},{FINAL_X_OUT}))"
     )
 
     Y_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
-            f"{FINAL_Y_PAUSE}, "
-            f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),{FINAL_Y_PAUSE},"
+        f"{FINAL_Y_PAUSE}+({FINAL_Y_OUT}-{FINAL_Y_PAUSE})*({MOD_T}-{MOVE_IN_DURATION+PAUSE_DURATION})/{MOVE_OUT_DURATION})"
     )
     
     ALPHA_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
-            f"0.8 * {MOD_T} / {MOVE_IN_DURATION}, "
-        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
-            f"0.8, "
-            f"0.8 * (1 - ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION}))"
-        ")"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION}),0.8*{MOD_T}/{MOVE_IN_DURATION},"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),0.8,0.8*(1-({MOD_T}-{MOVE_IN_DURATION+PAUSE_DURATION})/{MOVE_OUT_DURATION})))"
     )
 
-    # 5. ساخت فیلتر `filter_complex` (با FIX کوتینگ "...")
+    # 5. ساخت فیلتر `filter_complex` (با کوتیشن سینگل استاندارد)
     filter_complex = (
         f"[0:v]scale=iw*sar:ih,setsar=1,split[v_main][v_canvas];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"
         f"[v_canvas]colorchannelmixer=aa=0[canvas];"
-        # FIX: استفاده از \" برای رفع مشکل کوتینگ در FFmpeg
-        f"[canvas][wm]overlay=x=\"{X_EXPRESSION}\":y=\"{Y_EXPRESSION}\":eof_action=repeat[moved_wm];"
-        f"[moved_wm]colorchannelmixer=aa=\"{ALPHA_EXPRESSION}\"[faded_wm];"
+        f"[canvas][wm]overlay=x='{X_EXPRESSION}':y='{Y_EXPRESSION}':eof_action=repeat[moved_wm];"
+        f"[moved_wm]colorchannelmixer=aa='{ALPHA_EXPRESSION}'[faded_wm];"
         f"[v_main][faded_wm]overlay[ov];"
         f"[ov]format=yuv420p[outv]"
     )
@@ -155,7 +136,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     cmd = (
         f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
         f"-filter_complex \"{filter_complex}\" "
-        f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -vsync 1 "
+        f"-c:v libx64 -preset veryfast -crf 23 -pix_fmt yuv420p -vsync 1 "
         f"-profile:v high -level:v 4.0 " 
         f"-g 30 -keyint_min 1 -movflags +faststart "
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
@@ -186,3 +167,24 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
              raise e
         else:
              raise Exception(f"Error during animated image watermark processing: {e}")
+
+# ----------------------------------------------------------------------------------
+## تابع تشخیصی FFmpeg
+# ----------------------------------------------------------------------------------
+
+async def get_ffmpeg_version():
+    """اجرای دستور 'ffmpeg -version' و برگرداندن خط اول خروجی."""
+    cmd = "ffmpeg -version"
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *shlex.split(cmd), 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE
+        )
+        stdout, _ = await process.communicate()
+        # فقط خط اول که شامل شماره نسخه است را برمی‌گرداند
+        return stdout.decode().split('\n')[0]
+    except FileNotFoundError:
+        return "❌ برنامه FFmpeg در مسیرهای سیستمی یافت نشد."
+    except Exception as e:
+        return f"❌ خطای اجرای دستور: {e}"
