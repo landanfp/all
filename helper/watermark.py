@@ -152,17 +152,22 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             ")"
         )
 
+        # 5. فیکس: Escape کاماها برای shell (خارج از f-string)
+        escaped_X = X_EXPRESSION.replace(',', r'\,')
+        escaped_Y = Y_EXPRESSION.replace(',', r'\,')
+        escaped_alpha = ALPHA_EXPRESSION.replace(',', r'\,')
+
         # 5. ساخت فیلتر `filter_complex` - فیکس scale به main_h و format=yuv444p برای smooth
         filter_complex = (
             f"[0:v]scale=iw*sar:ih,setsar=1[v];"
             f"[1:v]scale={size_percent/100}*main_h:-1,format=yuva444p[wm];"  # فیکس: main_h به جای iw
            
             # اعمال آلفا بر اساس زمان
-            f"[wm]colorchannelmixer=aa='{ALPHA_EXPRESSION}'[wma];" 
+            f"[wm]colorchannelmixer=aa='{escaped_alpha}'[wma];" 
            
-            # اعمال انیمیشن X و Y در فیلتر overlay - escape کاما برای shell
-            f"[v][wma]overlay=x='{X_EXPRESSION.replace(',', '\\,')}':"
-            f"y='{Y_EXPRESSION.replace(',', '\\,')}':"
+            # اعمال انیمیشن X و Y در فیلتر overlay
+            f"[v][wma]overlay=x='{escaped_X}':"
+            f"y='{escaped_Y}':"
             f"eof_action=repeat,format=yuv444p[ov];"  # فیکس: yuv444p برای smooth animation
             f"[ov]format=yuv420p[outv]" 
         )
