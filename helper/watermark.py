@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با اصلاح انیمیشن تصویر)
+# نام فایل: helper/watermark.py (نسخه نهایی با اصلاح انیمیشن تصویر و گزارش خطا)
 import asyncio
 import os
 import subprocess
@@ -18,7 +18,6 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     MOD_T = f"mod({T},{CYCLE_DURATION})"
     
     # 2. محاسبه مختصات نهایی در مرحله مکث (هدف: بالا-راست)
-    # (توجه: مختصات در این تابع بر اساس چیزی که قبلاً نوشته بودید تنظیم شده است)
     FINAL_X_PAUSE = "main_w-text_w-20" 
     FINAL_Y_PAUSE = "20" 
     
@@ -45,7 +44,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
             f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
     )
     
-    # C. محو شدن Alpha: محو شدن سریعتر (80% شفافیت)
+    # C. محو شدن Alpha: محو شدن سریعتر
     ALPHA_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
             f"0.8 * {MOD_T} / {MOVE_IN_DURATION}, "
@@ -73,7 +72,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
     )
     
-    # 7. اجرای ایمن FFmpeg (کوتاه کردن پیام خطا)
+    # 7. اجرای ایمن FFmpeg (با گزارش خطای بهبود یافته)
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
@@ -82,12 +81,14 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         )
         stdout, stderr = await process.communicate()
         
+        # [FIX] بهبود گزارش خطا
         if process.returncode != 0:
             error_output = stderr.decode()
-            short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
+            error_lines = error_output.strip().splitlines()
+            short_error = "\n".join(error_lines[-5:]) # دریافت ۵ خط آخر
             if not short_error:
-                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
-            raise Exception(f"FFmpeg failed: {short_error[:250]}...") 
+                short_error = error_output[:250] 
+            raise Exception(f"FFmpeg failed:\n{short_error}...")
 
     except FileNotFoundError:
         raise FileNotFoundError("FFmpeg command not found. Please install FFmpeg.")
@@ -133,7 +134,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
     )
     
-    # [FIX] استفاده از همان منطق آلفای متن (80%) برای هماهنگی
+    # انیمیشن آلفا (80% شفافیت)
     ALPHA_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
             f"0.8 * {MOD_T} / {MOVE_IN_DURATION}, "
@@ -143,9 +144,9 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         ")"
     )
 
-    # 5. [FIX] ساخت فیلتر `filter_complex` اصلاح شده
+    # 5. [FIX] ساخت فیلتر `filter_complex` اصلاح شده (رفع مشکل t=0)
     filter_complex = (
-        # 1. ویدیو اصلی را آماده و به دو شاخه تقسیم کنید (یکی برای بوم، یکی برای پایه)
+        # 1. ویدیو اصلی را آماده و به دو شاخه تقسیم کنید
         f"[0:v]scale=iw*sar:ih,setsar=1,split[v_main][v_canvas];"
         # 2. تصویر واترمارک را آماده کنید
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"
@@ -161,7 +162,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"[ov]format=yuv420p[outv]"
     )
 
-    # 6. ساخت دستور FFmpeg (بدون تغییر)
+    # 6. ساخت دستور FFmpeg 
     cmd = (
         f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
         f"-filter_complex \"{filter_complex}\" "
@@ -171,7 +172,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
     )
     
-    # 7. اجرای ایمن FFmpeg (بدون تغییر)
+    # 7. اجرای ایمن FFmpeg (با گزارش خطای بهبود یافته)
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
@@ -180,12 +181,14 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         )
         stdout, stderr = await process.communicate()
 
+        # [FIX] بهبود گزارش خطا
         if process.returncode != 0:
             error_output = stderr.decode()
-            short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
+            error_lines = error_output.strip().splitlines()
+            short_error = "\n".join(error_lines[-5:]) # دریافت ۵ خط آخر
             if not short_error:
-                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
-            raise Exception(f"FFmpeg failed: {short_error[:250]}...")
+                short_error = error_output[:250] 
+            raise Exception(f"FFmpeg failed:\n{short_error}...")
 
     except FileNotFoundError:
         raise FileNotFoundError("FFmpeg command not found. Please install FFmpeg.")
