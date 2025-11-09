@@ -1,6 +1,9 @@
 # نام فایل: helper/progress.py (ابزارهای نوار پیشرفت)
 import time
 from pyrogram.types import Message
+import logging
+
+logger = logging.getLogger(__name__)
 
 # اضافه شدن آرگومان 'stage' برای مدیریت نمایش مراحل مختلف
 async def progress_bar(current, total, message: Message, start, stage="در حال پردازش"):
@@ -30,8 +33,8 @@ async def progress_bar(current, total, message: Message, start, stage="در حا
     if int(diff) % 5 == 0 or percentage == 100 or percentage == 0:
         try:
             await message.edit(progress_text)
-        except Exception:
-            pass # نادیده گرفتن خطاهای ویرایش
+        except Exception as e:
+            logger.warning(f"Failed to edit progress message: {e}")
 
 def human_readable_size(size):
     """تبدیل بایت به واحد‌های خوانا (KB, MB, GB)."""
