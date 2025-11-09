@@ -1,8 +1,8 @@
-# نام فایل: plugins/text_watermark.py (هندلرهای واترمارک متنی)
+# نام فایل: plugins/text_watermark.py (هندلرهای واترمارک متنی + image ادغام‌شده)
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from helper.state import set_state, get_state, clear_state
-from helper.watermark import add_text_watermark
+from helper.watermark import add_text_watermark, add_image_watermark  # import add_image_watermark اضافه شد
 from helper.progress import progress_bar
 import os
 import time
@@ -24,6 +24,7 @@ positions = [
 ]
 sizes = [10, 15, 20, 25, 30, 35, 40, 45, 50]
 
+# توابع ask_text, handle_text_input, set_position, set_size بدون تغییر (همون کد قبلی)...
 
 async def ask_text(client, query: CallbackQuery):
     """درخواست متن واترمارک."""
@@ -103,66 +104,119 @@ async def set_size(client, query: CallbackQuery):
         await query.answer("خطایی رخ داد.")
 
 async def handle_video(client, message: Message):
-    """دریافت ویدیو، پردازش و ارسال خروجی."""
+    """دریافت ویدیو، پردازش و ارسال خروجی (universal: text یا image watermark)."""
     user_id = message.from_user.id
     input_path = None
     output_file = None
     msg = None
+    image = None
     try:
-        if get_state(user_id, "step") != "ready":
-            return
+        step = get_state(user_id, "step")
+        logger.info(f"Video handler triggered for user {user_id}, current step: {step}")  # لاگ اضافی برای دیباگ
 
-        text = get_state(user_id, "text")
-        position = get_state(user_id, "position")
-        size = get_state(user_id, "size")
-        
-        if not text:
-            await message.reply("❌ واترمارک متنی پیدا نشد. لطفا برای تنظیم مجدد، /start را ارسال کنید.")
-            clear_state(user_id)
-            return
+        # **فیکس: Check step با try-except برای جلوگیری از crash**
+        if step == "ready":  # Text watermark flow
+            logger.info(f"Processing TEXT watermark for user {user_id}")
+            text = get_state(user_id, "text")
+            position = get_state(user_id, "position")
+            size = get_state(user_id, "size")
+            
+            if not text:
+                await message.reply("❌ واترمارک متنی پیدا نشد. لطفا برای تنظیم مجدد، /start را ارسال کنید.")
+                clear_state(user_id)
+                return
 
-        msg = await message.reply("⏳ در حال دانلود ویدیو...")
+            msg = await message.reply("⏳ در حال دانلود ویدیو...")
+            logger.info(f"Sending download message for TEXT flow - user {user_id}")  # لاگ قبل reply
 
-        # استفاده از یک نام محلی برای دانلود
-        input_path_placeholder = f"{message.video.file_id}_{user_id}.mp4"
-        output_file = f"wm_{message.video.file_id}_{user_id}.mp4"
-        start = time.time()
-        
-        # **اصلاح ۱: گرفتن مسیر واقعی فایل دانلود شده**
-        input_path = await message.download(file_name=input_path_placeholder, progress=progress_bar, progress_args=(msg, start, "دانلود"))
+            # استفاده از یک نام محلی برای دانلود
+            input_path_placeholder = f"{message.video.file_id}_{user_id}.mp4"
+            output_file = f"wm_{message.video.file_id}_{user_id}.mp4"
+            start = time.time()
+            
+            # **اصلاح ۱: گرفتن مسیر واقعی فایل دانلود شده**
+            input_path = await message.download(file_name=input_path_placeholder, progress=progress_bar, progress_args=(msg, start, "دانلود"))
 
-        # مرحله افزودن واترمارک
-        await msg.edit("⚙️ در حال افزودن واترمارک...")
-        await add_text_watermark(input_path, output_file, text, position, size) # استفاده از مسیر واقعی
-        
-        if not os.path.exists(output_file):
-             raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فونت یا کدک)")
+            # مرحله افزودن واترمارک
+            await msg.edit("⚙️ در حال افزودن واترمارک...")
+            await add_text_watermark(input_path, output_file, text, position, size) # استفاده از مسیر واقعی
+            
+            if not os.path.exists(output_file):
+                 raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فونت یا کدک)")
 
-        # مرحله آپلود 
-        await msg.edit("⬆️ در حال آپلود فایل...")
-        await message.reply_video(
-            output_file, 
-            caption=f"ویدیوی واترمارک‌خورده شما با متن: {text}",
-            progress=progress_bar, 
-            progress_args=(msg, start, "آپلود"),
-            supports_streaming=True
-        )
-        
-        # **اصلاح ۲: حذف پیام پیشرفت در صورت موفقیت**
-        await msg.delete()
-        logger.info(f"Text watermark processed successfully for user {user_id}")
+            # مرحله آپلود 
+            await msg.edit("⬆️ در حال آپلود فایل...")
+            await message.reply_video(
+                output_file, 
+                caption=f"ویدیوی واترمارک‌خورده شما با متن: {text}",
+                progress=progress_bar, 
+                progress_args=(msg, start, "آپلود"),
+                supports_streaming=True
+            )
+            
+            # **اصلاح ۲: حذف پیام پیشرفت در صورت موفقیت**
+            await msg.delete()
+            logger.info(f"Text watermark processed successfully for user {user_id}")
+
+        elif step == "ready_img":  # Image watermark flow
+            logger.info(f"Processing IMAGE watermark for user {user_id}")
+            image = get_state(user_id, "image_path")
+            position = get_state(user_id, "position")
+            size = get_state(user_id, "size")
+
+            if not image or not os.path.exists(image):
+                await message.reply("❌ مسیر تصویر واترمارک پیدا نشد. لطفا دوباره شروع کنید.")
+                if image and os.path.exists(image): os.remove(image)
+                clear_state(user_id)
+                return
+
+            msg = await message.reply("⏳ در حال دانلود ویدیو...")
+            logger.info(f"Sending download message for IMAGE flow - user {user_id}")  # لاگ قبل reply (کلیدی!)
+
+            input_path_placeholder = f"{message.video.file_id}_{user_id}.mp4"
+            output_file = f"imgwm_{message.video.file_id}_{user_id}.mp4"
+            start = time.time()
+
+            # **اصلاح ۱: گرفتن مسیر واقعی فایل دانلود شده**
+            input_path = await message.download(file_name=input_path_placeholder, progress=progress_bar, progress_args=(msg, start, "دانلود"))
+
+            # مرحله افزودن واترمارک
+            await msg.edit("⚙️ در حال افزودن تصویر واترمارک...")
+            await add_image_watermark(input_path, output_file, image, position, size)
+
+            if not os.path.exists(output_file):
+                 raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فایل یا کدک)")
+
+            # مرحله آپلود
+            await msg.edit("⬆️ در حال آپلود فایل نهایی...")
+            await message.reply_video(
+                output_file, 
+                caption="ویدیوی نهایی با واترمارک تصویری آماده شد!",
+                progress=progress_bar,
+                progress_args=(msg, start, "آپلود"),
+                supports_streaming=True
+            )
+            
+            # **اصلاح ۲: حذف پیام پیشرفت در صورت موفقیت**
+            await msg.delete()
+            logger.info(f"Image watermark processed successfully for user {user_id}")
+
+        else:
+            logger.warning(f"Unknown step '{step}' for video handler - user {user_id}. Ignoring.")
+            return  # هیچ reply نمی‌فرسته (مثل قبل)
 
     except Exception as e:
-        logger.error(f"Text Watermark Error for user {user_id}: {e}")
+        logger.error(f"Video Processing Error for user {user_id} (step: {step}): {e}")
         # در صورت خطا، پیام را ویرایش می‌کنیم و آن را حذف نمی‌کنیم.
         if msg:
             await msg.edit(f"❌ یک خطا رخ داد: {e}")
 
     finally:
-        # **اصلاح ۳: حذف msg.delete() و فقط پاکسازی فایل‌ها**
-        # پاکسازی فایل‌ها با استفاده از مسیر واقعی
+        # پاکسازی فایل‌ها
         if input_path and os.path.exists(input_path):
             os.remove(input_path)
         if output_file and os.path.exists(output_file):
             os.remove(output_file)
+        if image and os.path.exists(image):
+            os.remove(image)  # حذف تصویر واترمارک
         clear_state(user_id)
