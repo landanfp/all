@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی، شامل ابزار Version)
+# نام فایل: helper/watermark.py (نسخه نهایی، فشرده و کامل)
 import asyncio
 import os
 import subprocess
@@ -45,6 +45,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     # تعریف فیلتر Drawtext
     safe_text = shlex.quote(text)
     
+    # کوتیشن سینگل برای drawtext کافیست
     drawtext_loop = (
         f"drawtext=text={safe_text}:fontcolor=white:" 
         f"fontsize=h*{size_percent}/100:shadowcolor=black@0.4:shadowx=2:shadowy=2:"
@@ -60,7 +61,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
     )
     
-    # اجرای ایمن FFmpeg (با گزارش خطای بهبود یافته)
+    # اجرای ایمن FFmpeg
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
@@ -87,7 +88,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
              raise Exception(f"Error during animated text watermark processing: {e}")
 
 # ----------------------------------------------------------------------------------
-## تابع واترمارک تصویری (اصلاح نهایی)
+## تابع واترمارک تصویری (اصلاح نهایی - بدون کوتیشن داخلی)
 # ----------------------------------------------------------------------------------
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
@@ -121,13 +122,14 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),0.8,0.8*(1-({MOD_T}-{MOVE_IN_DURATION+PAUSE_DURATION})/{MOVE_OUT_DURATION})))"
     )
 
-    # 5. ساخت فیلتر `filter_complex` (با کوتیشن سینگل استاندارد)
+    # 5. ساخت فیلتر `filter_complex` 
     filter_complex = (
         f"[0:v]scale=iw*sar:ih,setsar=1,split[v_main][v_canvas];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"
         f"[v_canvas]colorchannelmixer=aa=0[canvas];"
-        f"[canvas][wm]overlay=x='{X_EXPRESSION}':y='{Y_EXPRESSION}':eof_action=repeat[moved_wm];"
-        f"[moved_wm]colorchannelmixer=aa='{ALPHA_EXPRESSION}'[faded_wm];"
+        # FIX: حذف کامل کوتیشن‌های سینگل از اطراف عبارت‌ها:
+        f"[canvas][wm]overlay=x={X_EXPRESSION}:y={Y_EXPRESSION}:eof_action=repeat[moved_wm];"
+        f"[moved_wm]colorchannelmixer=aa={ALPHA_EXPRESSION}[faded_wm];"
         f"[v_main][faded_wm]overlay[ov];"
         f"[ov]format=yuv420p[outv]"
     )
@@ -136,13 +138,13 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     cmd = (
         f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
         f"-filter_complex \"{filter_complex}\" "
-        f"-c:v libx64 -preset veryfast -crf 23 -pix_fmt yuv420p -vsync 1 "
+        f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -vsync 1 "
         f"-profile:v high -level:v 4.0 " 
         f"-g 30 -keyint_min 1 -movflags +faststart "
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
     )
     
-    # 7. اجرای ایمن FFmpeg (با گزارش خطای بهبود یافته)
+    # 7. اجرای ایمن FFmpeg
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
