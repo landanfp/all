@@ -27,6 +27,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     FINAL_Y_OUT = "main_h-text_h-20" 
 
     # تعریف انیمیشن (Expressionهای فشرده)
+    # این عبارت‌ها از کاما برای جداسازی استفاده می‌کنند (چون در drawtext کار می‌کند)
     X_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}),({FINAL_X_PAUSE})*{MOD_T}/{MOVE_IN_DURATION}-text_w*(1-{MOD_T}/{MOVE_IN_DURATION})," 
         f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),{FINAL_X_PAUSE},{FINAL_X_OUT}))"
@@ -91,7 +92,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
 
 
 # ----------------------------------------------------------------------------------
-## تابع واترمارک تصویری (اصلاح نهایی با Alpha Extract/Merge)
+## تابع واترمارک تصویری (اصلاح نهایی با Alpha Extract/Merge و نقطه‌ویرگول)
 # ----------------------------------------------------------------------------------
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
@@ -109,20 +110,20 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     FINAL_X_OUT = FINAL_X_PAUSE
     FINAL_Y_OUT = "main_h-overlay_h-20" 
 
-    # تعریف انیمیشن (Expressionهای فشرده)
+    # 🚨 FIX CRITICAL: جایگزینی کاما (,) با نقطه‌ویرگول (;) در عبارت‌های شرطی IF
     X_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION}),({FINAL_X_PAUSE})*{MOD_T}/{MOVE_IN_DURATION}-overlay_w*(1-{MOD_T}/{MOVE_IN_DURATION}),"
-        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),{FINAL_X_PAUSE},{FINAL_X_OUT}))"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION});({FINAL_X_PAUSE})*{MOD_T}/{MOVE_IN_DURATION}-overlay_w*(1-{MOD_T}/{MOVE_IN_DURATION});"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION});{FINAL_X_PAUSE};{FINAL_X_OUT}))"
     )
 
     Y_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),{FINAL_Y_PAUSE},"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION});{FINAL_Y_PAUSE};"
         f"{FINAL_Y_PAUSE}+({FINAL_Y_OUT}-{FINAL_Y_PAUSE})*({MOD_T}-{MOVE_IN_DURATION+PAUSE_DURATION})/{MOVE_OUT_DURATION})"
     )
     
     ALPHA_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION}),0.8*{MOD_T}/{MOVE_IN_DURATION},"
-        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION}),0.8,0.8*(1-({MOD_T}-{MOVE_IN_DURATION+PAUSE_DURATION})/{MOVE_OUT_DURATION})))"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION});0.8*{MOD_T}/{MOVE_IN_DURATION};"
+        f"if(lt({MOD_T},{MOVE_IN_DURATION+PAUSE_DURATION});0.8;0.8*(1-({MOD_T}-{MOVE_IN_DURATION+PAUSE_DURATION})/{MOVE_OUT_DURATION})))"
     )
 
     # 5. ساخت فیلتر `filter_complex` 
@@ -130,7 +131,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"[0:v]scale=iw*sar:ih,setsar=1[v_main];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm_scaled];" 
         
-        # 1. اعمال انیمیشن X/Y با کوتیشن سینگل
+        # 1. اعمال انیمیشن X/Y با کوتیشن سینگل (که با نقطه‌ویرگول در منطق IF سازگار شده)
         f"[v_main][wm_scaled]overlay=x='{X_EXPRESSION}':y='{Y_EXPRESSION}':eof_action=repeat:shortest=1[moved_wm];"
         
         # 2. استخراج کانال شفافیت
