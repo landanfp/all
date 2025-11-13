@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی و عملیاتی با حذف پارامترهای ناامن)
+# نام فایل: helper/watermark.py (نسخه نهایی با استفاده از فیلتر lut/luta)
 import asyncio
 import os
 import subprocess
@@ -93,7 +93,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
 # ----------------------------------------------------------------------------------
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
-    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با پارامترهای ایمن)."""
+    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با فیلتر lut/luta)."""
     
     T = "t"
     MOVE_IN_DURATION = 2
@@ -130,14 +130,15 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         ")"
     )
 
+    # 4. ساخت فیلتر `filter_complex` (استفاده از lutc/luta برای پایداری بیشتر)
     filter_complex = (
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  
         
-        # بدون نقل قول تکی برای ALPHA_EXPRESSION
-        f"[wm]colorchannelmixer=aa={ALPHA_EXPRESSION}[wma];" 
+        # ⚠️ جایگزینی colorchannelmixer با lut/luta برای پایداری
+        f"[wm]luty='val':luta='val*{ALPHA_EXPRESSION}'[wma];" 
         
-        # با نقل قول تکی برای مختصات X و Y
+        # اعمال انیمیشن X و Y در فیلتر overlay
         f"[v][wma]overlay=x='{X_EXPRESSION}':"
         f"y='{Y_EXPRESSION}':"
         f"eof_action=repeat:shortest=0:repeatlast=0[ov];" 
@@ -166,10 +167,11 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         if process.returncode != 0:
             error_output = stderr.decode()
             
-            # بازگشت به مدیریت خطای کوتاه و سعی در پاکسازی
+            # مدیریت خطای کوتاه
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
                 if "ffmpeg version" in error_output:
+                    # تلاش برای گرفتن خطای پس از جزئیات FFmpeg
                     short_error = error_output.split('libpostproc')[-1].strip()
                     short_error = short_error.split('\n')[0].strip()
                 
