@@ -5,7 +5,6 @@ import subprocess
 import shlex
 
 # تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
-# NOTE: از آنجایی که CYLCE_DURATION در هر تابع تغییر می‌کند، باید داخل توابع تعریف شود.
 T = "t" # متغیر زمان اصلی در FFmpeg
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
@@ -86,7 +85,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
             error_output = stderr.decode()
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
-                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
+                short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
             raise Exception(f"FFmpeg failed: {short_error[:250]}...") 
 
     except FileNotFoundError:
@@ -142,18 +141,19 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         ")"
     )
 
-    # 5. ساخت فیلتر `filter_complex`
+    # 5. ساخت فیلتر `filter_complex` - با اعمال اصلاحات کلیدی برای پایداری انیمیشن
     filter_complex = (
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
-        f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];" 
+        f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  # تبدیل به فرمت با کانال آلفا
         
         # اعمال آلفا بر اساس زمان
         f"[wm]colorchannelmixer=aa='{ALPHA_EXPRESSION}'[wma];" 
         
         # اعمال انیمیشن X و Y در فیلتر overlay
+        # اضافه شدن shortest=0 و repeatlast=0 برای مدیریت حلقه تکرار
         f"[v][wma]overlay=x='{X_EXPRESSION}':"
         f"y='{Y_EXPRESSION}':"
-        f"eof_action=repeat[ov];" 
+        f"eof_action=repeat:shortest=0:repeatlast=0[ov];" # **<-- خط اصلاح شده**
         f"[ov]format=yuv420p[outv]" 
     )
 
@@ -180,7 +180,9 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             error_output = stderr.decode()
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
-                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
+                short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
+            # خطای اصلی را پرینت کنیم برای debug نهایی
+            # print("FFMPEG Error:", stderr.decode()) 
             raise Exception(f"FFmpeg failed: {short_error[:250]}...")
 
     except FileNotFoundError:
