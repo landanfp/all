@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با استفاده از فیلتر lut/luta)
+# نام فایل: helper/watermark.py (نسخه نهایی با فیلتر lut/luta و نمایش کامل خطا)
 import asyncio
 import os
 import subprocess
@@ -66,7 +66,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
     )
     
-    # 6. اجرای ایمن FFmpeg 
+    # 6. اجرای ایمن FFmpeg (با مدیریت خطای کوتاه)
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
@@ -77,6 +77,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         
         if process.returncode != 0:
             error_output = stderr.decode()
+            # مدیریت خطای کوتاه
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
@@ -130,12 +131,11 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         ")"
     )
 
-    # 4. ساخت فیلتر `filter_complex` (استفاده از lutc/luta برای پایداری بیشتر)
     filter_complex = (
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  
         
-        # ⚠️ جایگزینی colorchannelmixer با lut/luta برای پایداری
+        # استفاده از lut/luta
         f"[wm]luty='val':luta='val*{ALPHA_EXPRESSION}'[wma];" 
         
         # اعمال انیمیشن X و Y در فیلتر overlay
@@ -153,7 +153,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-map [outv] -map 0:a:0? \"{output_path}\" -y" 
     )
     
-    # 6. اجرای ایمن FFmpeg (با مدیریت خطای کوتاه)
+    # 6. اجرای ایمن FFmpeg - 🛑 نمایش کامل خروجی خطا
     try:
         cmd_list = shlex.split(cmd) 
         
@@ -167,15 +167,9 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         if process.returncode != 0:
             error_output = stderr.decode()
             
-            # مدیریت خطای کوتاه
-            short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
-            if not short_error:
-                if "ffmpeg version" in error_output:
-                    # تلاش برای گرفتن خطای پس از جزئیات FFmpeg
-                    short_error = error_output.split('libpostproc')[-1].strip()
-                    short_error = short_error.split('\n')[0].strip()
-                
-            raise Exception(f"FFmpeg failed: {short_error[:250]}...")
+            # 🚨🚨 برگرداندن تمام خروجی خطا بدون هیچ کوتاه‌سازی 🚨🚨
+            # این تنها راه برای دیدن خطای واقعی سیستم شماست.
+            raise Exception(f"❌ FFmpeg failed (RC: {process.returncode}). Full Error:\n{error_output.strip()}")
 
 
     except FileNotFoundError:
