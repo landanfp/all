@@ -66,7 +66,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
     )
     
-    # 6. اجرای ایمن FFmpeg 
+    # 6. اجرای ایمن FFmpeg (بدون تغییر)
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
@@ -77,7 +77,6 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         
         if process.returncode != 0:
             error_output = stderr.decode()
-            # این بخش را تغییر ندادیم چون کار می‌کرد
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
@@ -172,11 +171,11 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         if process.returncode != 0:
             error_output = stderr.decode()
             
-            # 🚨 نمایش خطای کامل برای عیب یابی! 🚨
+            # 🚨 نمایش خطای کامل، بدون هیچ محدودیتی! 🚨
             full_error_message = error_output.strip()
             
-            # خطای کامل را برگردان
-            raise Exception(f"❌ FFmpeg failed with return code {process.returncode}. Full Error (Max 1000 chars):\n{full_error_message[:1000]}")
+            # این بار اگر خطا کامل نباشد، مشکل از نحوه نمایش خطای پروژه شماست.
+            raise Exception(f"❌ FFmpeg failed (RC: {process.returncode}). Full Error:\n{full_error_message}")
 
 
     except FileNotFoundError:
