@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با فیلتر lut/luta و نمایش کامل خطا)
+# نام فایل: helper/watermark.py (نسخه نهایی با رفع کامل اشکال نحوی lut/luta و نمایش کامل خطا)
 import asyncio
 import os
 import subprocess
@@ -77,7 +77,6 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         
         if process.returncode != 0:
             error_output = stderr.decode()
-            # مدیریت خطای کوتاه
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
@@ -135,10 +134,10 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  
         
-        # استفاده از lut/luta
-        f"[wm]luty='val':luta='val*{ALPHA_EXPRESSION}'[wma];" 
+        # 🚨 اصلاح نهایی: حذف نقل‌قول‌های تکی از lut/luta برای حل مشکل نحوی
+        f"[wm]luty=val:luta=val*{ALPHA_EXPRESSION}[wma];" 
         
-        # اعمال انیمیشن X و Y در فیلتر overlay
+        # اعمال انیمیشن X و Y در فیلتر overlay (نقل قول تکی اینجا لازم است)
         f"[v][wma]overlay=x='{X_EXPRESSION}':"
         f"y='{Y_EXPRESSION}':"
         f"eof_action=repeat:shortest=0:repeatlast=0[ov];" 
@@ -167,7 +166,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         if process.returncode != 0:
             error_output = stderr.decode()
             
-            # 🚨🚨 برگرداندن تمام خروجی خطا بدون هیچ کوتاه‌سازی 🚨🚨
+            # برگرداندن تمام خروجی خطا
             raise Exception(f"❌ FFmpeg failed (RC: {process.returncode}). Full Error:\n{error_output.strip()}")
 
 
