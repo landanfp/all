@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی و عملیاتی با رفع اشکال واترمارک تصویری)
+# نام فایل: helper/watermark.py (نسخه نهایی و عملیاتی با استراتژی پیشرفته نمایش خطا)
 import asyncio
 import os
 import subprocess
@@ -7,6 +7,7 @@ import shlex
 # تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
 T = "t" # متغیر زمان اصلی در FFmpeg
 
+# --- تابع add_text_watermark (بدون تغییر) ---
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
     """افزودن واترمارک متنی متحرک و محوشونده به ویدیو (با تکرار حلقوی)."""
     
@@ -110,7 +111,6 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     FINAL_Y_OUT = "main_h-overlay_h-20" 
 
     # 3. تعریف انیمیشن (Expressionها) - **اصلاحات نهایی نحوی FFmpeg اعمال شده**
-    # از 'mod(t,X)' به جای یک متغیر موقت استفاده شده تا تداخل نحوی کاهش یابد.
     
     # X_EXPRESSION: (ورود: 0 تا 2) (مکث: 2 تا 6) (خروج: 6 تا 7.5)
     X_EXPRESSION = (
@@ -164,9 +164,8 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
     )
     
-    # 6. اجرای ایمن FFmpeg
+    # 6. اجرای ایمن FFmpeg (با استراتژی پاکسازی خطا)
     try:
-        # استفاده از shlex.split برای امنیت بیشتر در برابر کاراکترهای مسیر
         cmd_list = shlex.split(cmd) 
         
         process = await asyncio.create_subprocess_exec(
@@ -179,11 +178,22 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         if process.returncode != 0:
             error_output = stderr.decode()
             
-            # مدیریت خطای کوتاه
-            short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
-            if not short_error:
-                short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
-            raise Exception(f"FFmpeg failed: {short_error[:250]}...")
+            # 🚨 استراتژی جدید: حذف سربرگ‌های طولانی برای نمایش خطای واقعی 🚨
+            cleaned_error = error_output
+            
+            # پاکسازی سربرگ FFmpeg
+            if "ffmpeg version" in cleaned_error:
+                cleaned_error = cleaned_error.split('Configuration:')[-1].strip()
+            
+            # پاکسازی جزئیات کتابخانه
+            cleaned_error = cleaned_error.split('libpostproc')[-1].strip()
+            
+            # تلاش برای گرفتن خطای اصلی (احتمالا در پایان)
+            if not cleaned_error.strip():
+                # اگر باز هم خالی بود، سربرگ FFmpeg را می گیریم و کوتاه می کنیم
+                cleaned_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
+
+            raise Exception(f"❌ FFmpeg failed (RC: {process.returncode}). Error:\n{cleaned_error[:500]}...")
 
 
     except FileNotFoundError:
