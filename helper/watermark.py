@@ -134,10 +134,10 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  
         
-        # 🚨 اصلاح نهایی: حذف نقل‌قول‌های تکی از lut/luta برای حل مشکل نحوی
-        f"[wm]luty=val:luta=val*{ALPHA_EXPRESSION}[wma];" 
+        # 🚨 اصلاح نهایی: قرار دادن عبارت آلفا در نقل قول تکی برای حل مشکل نحوی FFmpeg 7+
+        f"[wm]luty=val:luta='val*{ALPHA_EXPRESSION}'[wma];" 
         
-        # اعمال انیمیشن X و Y در فیلتر overlay (نقل قول تکی اینجا لازم است)
+        # اعمال انیمیشن X و Y در فیلتر overlay 
         f"[v][wma]overlay=x='{X_EXPRESSION}':"
         f"y='{Y_EXPRESSION}':"
         f"eof_action=repeat:shortest=0:repeatlast=0[ov];" 
