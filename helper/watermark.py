@@ -77,7 +77,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         
         if process.returncode != 0:
             error_output = stderr.decode()
-            # بازگشت به مدیریت خطای کوتاه برای ربات
+            # مدیریت خطای کوتاه برای ربات
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
@@ -109,8 +109,8 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     FINAL_X_OUT = FINAL_X_PAUSE
     FINAL_Y_OUT = "main_h-overlay_h-20" 
 
-    # 3. تعریف انیمیشن (Expressionها) - **اصلاح شده**
-    # NOTE: در اینجا از MOD_T استفاده نکردیم تا از تکرار mod(t,7.5) در F-string جلوگیری شود، که باعث مشکل FFmpeg می‌شد.
+    # 3. تعریف انیمیشن (Expressionها) - **اصلاحات نهایی نحوی FFmpeg اعمال شده**
+    # از 'mod(t,X)' به جای یک متغیر موقت استفاده شده تا تداخل نحوی کاهش یابد.
     
     # X_EXPRESSION: (ورود: 0 تا 2) (مکث: 2 تا 6) (خروج: 6 تا 7.5)
     X_EXPRESSION = (
@@ -164,10 +164,13 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
     )
     
-    # 6. اجرای ایمن FFmpeg (بازگشت به حالت کوتاه کننده خطا)
+    # 6. اجرای ایمن FFmpeg
     try:
+        # استفاده از shlex.split برای امنیت بیشتر در برابر کاراکترهای مسیر
+        cmd_list = shlex.split(cmd) 
+        
         process = await asyncio.create_subprocess_exec(
-            *shlex.split(cmd), 
+            *cmd_list, 
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE
         )
@@ -175,7 +178,8 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
 
         if process.returncode != 0:
             error_output = stderr.decode()
-            # بازگشت به مدیریت خطای کوتاه
+            
+            # مدیریت خطای کوتاه
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
