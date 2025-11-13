@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با اصلاح مسیر و موقعیت)
+# نام فایل: helper/watermark.py (نسخه نهایی با اصلاح مسیر، موقعیت و DEBUG خطا)
 import asyncio
 import os
 import subprocess
@@ -10,24 +10,20 @@ T = "t" # متغیر زمان اصلی در FFmpeg
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
     """افزودن واترمارک متنی متحرک و محوشونده به ویدیو (با تکرار حلقوی)."""
     
-    # 1. تنظیمات زمان‌بندی انیمیشن (ورود 2، مکث 4، خروج 1.5)
+    # 1. تنظیمات زمان‌بندی انیمیشن 
     MOVE_IN_DURATION = 2
     PAUSE_DURATION = 4
     MOVE_OUT_DURATION = 1.5 
     CYCLE_DURATION = MOVE_IN_DURATION + PAUSE_DURATION + MOVE_OUT_DURATION
     MOD_T = f"mod({T},{CYCLE_DURATION})"
     
-    # 2. محاسبه مختصات نهایی در مرحله مکث (هدف: بالا-راست)
+    # 2. محاسبه مختصات نهایی 
     FINAL_X_PAUSE = "main_w-text_w-20" 
     FINAL_Y_PAUSE = "20" 
-    
-    # 3. محاسبه مختصات نهایی برای خروج (مستقیم به پایین)
     FINAL_X_OUT = FINAL_X_PAUSE 
     FINAL_Y_OUT = "main_h-text_h-20" 
 
-    # 4. تعریف انیمیشن (Expressionها)
-    
-    # A. موقعیت X: ورود از چپ، توقف در راست، ثابت تا خروج
+    # 3. تعریف انیمیشن (Expressionها) 
     X_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
             f"({FINAL_X_PAUSE}) * {MOD_T} / {MOVE_IN_DURATION} - text_w * (1 - {MOD_T} / {MOVE_IN_DURATION}), "
@@ -37,14 +33,12 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         ")"
     )
 
-    # B. موقعیت Y: توقف در بالا، حرکت مستقیم به پایین در زمان خروج
     Y_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
             f"{FINAL_Y_PAUSE}, "
             f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
     )
     
-    # C. محو شدن Alpha: محو شدن سریعتر
     ALPHA_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
             f"0.8 * {MOD_T} / {MOVE_IN_DURATION}, "
@@ -54,7 +48,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         ")"
     )
 
-    # 5. تعریف فیلتر Drawtext
+    # 4. تعریف فیلتر Drawtext
     safe_text = shlex.quote(text)
     
     drawtext_loop = (
@@ -65,14 +59,14 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         f"alpha='{ALPHA_EXPRESSION}'" 
     )
 
-    # 6. ساخت دستور FFmpeg
+    # 5. ساخت دستور FFmpeg
     cmd = (
         f"ffmpeg -i \"{input_path}\" -vf \"{drawtext_loop}\" "
         f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "
         f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
     )
     
-    # 7. اجرای ایمن FFmpeg (کوتاه کردن پیام خطا)
+    # 6. اجرای ایمن FFmpeg 
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
@@ -83,6 +77,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         
         if process.returncode != 0:
             error_output = stderr.decode()
+            # این بخش را تغییر ندادیم چون کار می‌کرد
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
@@ -101,22 +96,21 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
     """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با تکرار حلقوی)."""
     
-    # 1. تنظیمات زمان‌بندی انیمیشن (ورود 2، مکث 4، خروج 1.5)
+    # 1. تنظیمات زمان‌بندی انیمیشن (بدون تغییر)
+    T = "t"
     MOVE_IN_DURATION = 2
     PAUSE_DURATION = 4
     MOVE_OUT_DURATION = 1.5 
     CYCLE_DURATION = MOVE_IN_DURATION + PAUSE_DURATION + MOVE_OUT_DURATION
     MOD_T = f"mod({T},{CYCLE_DURATION})"
 
-    # 2. محاسبه مختصات نهایی در مرحله مکث (هدف: بالا-راست)
+    # 2. محاسبه مختصات نهایی (بدون تغییر)
     FINAL_X_PAUSE = "main_w-overlay_w-20"
     FINAL_Y_PAUSE = "20" 
-
-    # 3. محاسبه مختصات نهایی برای خروج (مستقیم به پایین)
     FINAL_X_OUT = FINAL_X_PAUSE
     FINAL_Y_OUT = "main_h-overlay_h-20" 
 
-    # 4. تعریف انیمیشن (Expressionها)
+    # 3. تعریف انیمیشن (Expressionها) (بدون تغییر)
     X_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
             f"({FINAL_X_PAUSE}) * {MOD_T} / {MOVE_IN_DURATION} - overlay_w * (1 - {MOD_T} / {MOVE_IN_DURATION}), "
@@ -141,23 +135,22 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         ")"
     )
 
-    # 5. ساخت فیلتر `filter_complex` - با اعمال اصلاحات کلیدی برای پایداری انیمیشن
+    # 4. ساخت فیلتر `filter_complex` (با آخرین اصلاحات منطقی FFmpeg)
     filter_complex = (
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
-        f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  # تبدیل به فرمت با کانال آلفا
+        f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  
         
         # اعمال آلفا بر اساس زمان
         f"[wm]colorchannelmixer=aa='{ALPHA_EXPRESSION}'[wma];" 
         
         # اعمال انیمیشن X و Y در فیلتر overlay
-        # اضافه شدن shortest=0 و repeatlast=0 برای مدیریت حلقه تکرار
         f"[v][wma]overlay=x='{X_EXPRESSION}':"
         f"y='{Y_EXPRESSION}':"
-        f"eof_action=repeat:shortest=0:repeatlast=0[ov];" # **<-- خط اصلاح شده**
+        f"eof_action=repeat:shortest=0:repeatlast=0[ov];" 
         f"[ov]format=yuv420p[outv]" 
     )
 
-    # 6. ساخت دستور FFmpeg
+    # 5. ساخت دستور FFmpeg (بدون تغییر)
     cmd = (
         f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
         f"-filter_complex \"{filter_complex}\" "
@@ -167,7 +160,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
     )
     
-    # 7. اجرای ایمن FFmpeg (کوتاه کردن پیام خطا)
+    # 6. اجرای ایمن FFmpeg (اصلاح شده برای DEBUG)
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
@@ -178,12 +171,13 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
 
         if process.returncode != 0:
             error_output = stderr.decode()
-            short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
-            if not short_error:
-                short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
-            # خطای اصلی را پرینت کنیم برای debug نهایی
-            # print("FFMPEG Error:", stderr.decode()) 
-            raise Exception(f"FFmpeg failed: {short_error[:250]}...")
+            
+            # 🚨 نمایش خطای کامل برای عیب یابی! 🚨
+            full_error_message = error_output.strip()
+            
+            # خطای کامل را برگردان
+            raise Exception(f"❌ FFmpeg failed with return code {process.returncode}. Full Error (Max 1000 chars):\n{full_error_message[:1000]}")
+
 
     except FileNotFoundError:
         raise FileNotFoundError("FFmpeg command not found. Please install FFmpeg.")
