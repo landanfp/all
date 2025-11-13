@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی و عملیاتی با رفع کامل اشکال نحوی)
+# نام فایل: helper/watermark.py (نسخه نهایی و عملیاتی با حذف پارامترهای ناامن)
 import asyncio
 import os
 import subprocess
@@ -77,7 +77,6 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         
         if process.returncode != 0:
             error_output = stderr.decode()
-            # مدیریت خطای کوتاه برای ربات
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
@@ -94,22 +93,19 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
 # ----------------------------------------------------------------------------------
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
-    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با تکرار حلقوی)."""
+    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با پارامترهای ایمن)."""
     
-    # 1. تنظیمات زمان‌بندی انیمیشن (بدون تغییر)
     T = "t"
     MOVE_IN_DURATION = 2
     PAUSE_DURATION = 4
     MOVE_OUT_DURATION = 1.5 
     CYCLE_DURATION = MOVE_IN_DURATION + PAUSE_DURATION + MOVE_OUT_DURATION
     
-    # 2. محاسبه مختصات نهایی (بدون تغییر)
     FINAL_X_PAUSE = "main_w-overlay_w-20"
     FINAL_Y_PAUSE = "20" 
     FINAL_X_OUT = FINAL_X_PAUSE
     FINAL_Y_OUT = "main_h-overlay_h-20" 
 
-    # 3. تعریف انیمیشن (Expressionها)
     X_EXPRESSION = (
         f"if(lt(mod(t,{CYCLE_DURATION}),{MOVE_IN_DURATION}), " 
             f"({FINAL_X_PAUSE}) * mod(t,{CYCLE_DURATION}) / {MOVE_IN_DURATION} - overlay_w * (1 - mod(t,{CYCLE_DURATION}) / {MOVE_IN_DURATION}), "
@@ -134,29 +130,26 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         ")"
     )
 
-    # 4. ساخت فیلتر `filter_complex` (با رفع اشکال نحوی: حذف نقل قول تکی از 'aa' )
     filter_complex = (
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  
         
-        # اعمال آلفا بر اساس زمان: ⚠️ نقل قول تکی حذف شده است
+        # بدون نقل قول تکی برای ALPHA_EXPRESSION
         f"[wm]colorchannelmixer=aa={ALPHA_EXPRESSION}[wma];" 
         
-        # اعمال انیمیشن X و Y در فیلتر overlay: (نیاز به نقل قول تکی دارد)
+        # با نقل قول تکی برای مختصات X و Y
         f"[v][wma]overlay=x='{X_EXPRESSION}':"
         f"y='{Y_EXPRESSION}':"
         f"eof_action=repeat:shortest=0:repeatlast=0[ov];" 
         f"[ov]format=yuv420p[outv]" 
     )
 
-    # 5. ساخت دستور FFmpeg (بدون تغییر)
+    # 5. ساخت دستور FFmpeg (پارامترهای کوتاه و ایمن شده)
     cmd = (
-        f"ffmpeg -noautorotate -i \"{input_path}\" -i \"{image_path}\" "
+        f"ffmpeg -i \"{input_path}\" -i \"{image_path}\" "
         f"-filter_complex \"{filter_complex}\" "
-        f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -vsync 1 "
-        f"-profile:v high -level:v 4.0 " 
-        f"-g 30 -keyint_min 1 -movflags +faststart "
-        f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
+        f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "
+        f"-map [outv] -map 0:a:0? \"{output_path}\" -y" 
     )
     
     # 6. اجرای ایمن FFmpeg (با مدیریت خطای کوتاه)
@@ -173,10 +166,13 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         if process.returncode != 0:
             error_output = stderr.decode()
             
-            # بازگشت به مدیریت خطای کوتاه
+            # بازگشت به مدیریت خطای کوتاه و سعی در پاکسازی
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
-                short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
+                if "ffmpeg version" in error_output:
+                    short_error = error_output.split('libpostproc')[-1].strip()
+                    short_error = short_error.split('\n')[0].strip()
+                
             raise Exception(f"FFmpeg failed: {short_error[:250]}...")
 
 
