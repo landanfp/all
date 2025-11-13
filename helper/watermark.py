@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با اصلاح مسیر، موقعیت و DEBUG خطا)
+# نام فایل: helper/watermark.py (نسخه نهایی و عملیاتی با رفع اشکال واترمارک تصویری)
 import asyncio
 import os
 import subprocess
@@ -66,7 +66,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
     )
     
-    # 6. اجرای ایمن FFmpeg (بدون تغییر)
+    # 6. اجرای ایمن FFmpeg 
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
@@ -77,6 +77,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
         
         if process.returncode != 0:
             error_output = stderr.decode()
+            # بازگشت به مدیریت خطای کوتاه برای ربات
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
@@ -101,36 +102,40 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     PAUSE_DURATION = 4
     MOVE_OUT_DURATION = 1.5 
     CYCLE_DURATION = MOVE_IN_DURATION + PAUSE_DURATION + MOVE_OUT_DURATION
-    MOD_T = f"mod({T},{CYCLE_DURATION})"
-
+    
     # 2. محاسبه مختصات نهایی (بدون تغییر)
     FINAL_X_PAUSE = "main_w-overlay_w-20"
     FINAL_Y_PAUSE = "20" 
     FINAL_X_OUT = FINAL_X_PAUSE
     FINAL_Y_OUT = "main_h-overlay_h-20" 
 
-    # 3. تعریف انیمیشن (Expressionها) (بدون تغییر)
+    # 3. تعریف انیمیشن (Expressionها) - **اصلاح شده**
+    # NOTE: در اینجا از MOD_T استفاده نکردیم تا از تکرار mod(t,7.5) در F-string جلوگیری شود، که باعث مشکل FFmpeg می‌شد.
+    
+    # X_EXPRESSION: (ورود: 0 تا 2) (مکث: 2 تا 6) (خروج: 6 تا 7.5)
     X_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
-            f"({FINAL_X_PAUSE}) * {MOD_T} / {MOVE_IN_DURATION} - overlay_w * (1 - {MOD_T} / {MOVE_IN_DURATION}), "
-        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
+        f"if(lt(mod(t,{CYCLE_DURATION}),{MOVE_IN_DURATION}), " 
+            f"({FINAL_X_PAUSE}) * mod(t,{CYCLE_DURATION}) / {MOVE_IN_DURATION} - overlay_w * (1 - mod(t,{CYCLE_DURATION}) / {MOVE_IN_DURATION}), "
+        f"if(lt(mod(t,{CYCLE_DURATION}),{MOVE_IN_DURATION + PAUSE_DURATION}), " 
             f"{FINAL_X_PAUSE}, "
             f"{FINAL_X_OUT})"
         ")"
     )
 
+    # Y_EXPRESSION: (مکث: 0 تا 6) (حرکت: 6 تا 7.5)
     Y_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
+        f"if(lt(mod(t,{CYCLE_DURATION}),{MOVE_IN_DURATION + PAUSE_DURATION}), " 
             f"{FINAL_Y_PAUSE}, "
-            f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
+            f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * (mod(t,{CYCLE_DURATION}) - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
     )
     
+    # ALPHA_EXPRESSION: (ورود: 0 تا 2) (مکث: 2 تا 6) (خروج: 6 تا 7.5)
     ALPHA_EXPRESSION = (
-        f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
-            f"{MOD_T} / {MOVE_IN_DURATION}, "
-        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
+        f"if(lt(mod(t,{CYCLE_DURATION}),{MOVE_IN_DURATION}), " 
+            f"mod(t,{CYCLE_DURATION}) / {MOVE_IN_DURATION}, "
+        f"if(lt(mod(t,{CYCLE_DURATION}),{MOVE_IN_DURATION + PAUSE_DURATION}), " 
             f"1, "
-            f"(1 - ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION}))"
+            f"(1 - (mod(t,{CYCLE_DURATION}) - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION}))"
         ")"
     )
 
@@ -159,7 +164,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"-map [outv] -map 0:a:0? -metadata:s:v:0 rotate=0 \"{output_path}\" -y" 
     )
     
-    # 6. اجرای ایمن FFmpeg (اصلاح شده برای DEBUG)
+    # 6. اجرای ایمن FFmpeg (بازگشت به حالت کوتاه کننده خطا)
     try:
         process = await asyncio.create_subprocess_exec(
             *shlex.split(cmd), 
@@ -170,12 +175,11 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
 
         if process.returncode != 0:
             error_output = stderr.decode()
-            
-            # 🚨 نمایش خطای کامل، بدون هیچ محدودیتی! 🚨
-            full_error_message = error_output.strip()
-            
-            # این بار اگر خطا کامل نباشد، مشکل از نحوه نمایش خطای پروژه شماست.
-            raise Exception(f"❌ FFmpeg failed (RC: {process.returncode}). Full Error:\n{full_error_message}")
+            # بازگشت به مدیریت خطای کوتاه
+            short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
+            if not short_error:
+                short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
+            raise Exception(f"FFmpeg failed: {short_error[:250]}...")
 
 
     except FileNotFoundError:
