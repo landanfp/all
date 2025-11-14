@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس ظاهر واترمارک)
+# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس resize method)
 import asyncio
 import os
 import subprocess
@@ -112,8 +112,8 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             video_w, video_h = video.size
             duration = video.duration
             
-            # ۲. لود و تنظیم تصویر واترمارک (bicubic برای sharpness)
-            wm_base = ImageClip(image_path).resize(height=video_h * size_percent / 100, method='bicubic')
+            # ۲. لود و تنظیم تصویر واترمارک (فیکس: بدون method param)
+            wm_base = ImageClip(image_path).resize(height=video_h * size_percent / 100)
             wm_w, wm_h = wm_base.size
             
             # ۳. تنظیمات انیمیشن (مثل FFmpeg)
@@ -121,7 +121,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             PAUSE = 4.0
             MOVE_OUT = 1.5
             CYCLE = MOVE_IN + PAUSE + MOVE_OUT
-            ALPHA_MAX = 0.6  # فیکس: کمتر کدر برای visibility بهتر
+            ALPHA_MAX = 0.6  # کمتر کدر برای visibility بهتر
             
             # Lambda برای cycle time (با np.mod برای np.array t)
             get_cycle_time = lambda t: np.mod(t, CYCLE)
@@ -194,8 +194,8 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 audio_codec='aac',
                 temp_audiofile='temp-audio.m4a',
                 remove_temp=True,
-                preset='medium',  # فیکس: کیفیت بهتر، کمتر artifact
-                bitrate='2000k',  # فیکس: bitrate بالاتر برای sharpness
+                preset='medium',  # کیفیت بهتر، کمتر artifact
+                bitrate='2000k',  # bitrate بالاتر برای sharpness
                 verbose=False,
                 logger=None,
                 threads=1  # disable multiprocessing
