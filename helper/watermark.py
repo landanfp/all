@@ -1,10 +1,10 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس با set_mask برای opacity)
+# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس با ColorClip برای mask)
 import asyncio
 import os
 import subprocess
 import shlex
 import numpy as np  # برای np.mod و mask array
-from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip
+from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip, ColorClip
 
 # تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
 # NOTE: از آنجایی که CYCLE_DURATION در هر تابع تغییر می‌کند، باید داخل توابع تعریف شود.
@@ -160,24 +160,30 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 y_base + (y_out - y_base) * ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT)
             )
             
-            # Function برای opacity (برای set_mask - vectorized)
-            def opacity_func(t):
+            # Function برای opacity scalar (0-0.8)
+            def get_opacity(t):
                 c_t = get_cycle_time(t)
-                mask = np.zeros_like(c_t)  # array خالی
-                mask[c_t < MOVE_IN] = 0.8 * (c_t[c_t < MOVE_IN] / MOVE_IN)
-                mask[(c_t >= MOVE_IN) & (c_t < MOVE_IN + PAUSE)] = 0.8
-                mask[c_t >= MOVE_IN + PAUSE] = 0.8 * (1 - ((c_t[c_t >= MOVE_IN + PAUSE] - (MOVE_IN + PAUSE)) / MOVE_OUT))
-                return mask
+                if c_t < MOVE_IN:
+                    return 0.8 * (c_t / MOVE_IN)
+                elif c_t < MOVE_IN + PAUSE:
+                    return 0.8
+                else:
+                    return 0.8 * (1 - ((c_t - (MOVE_IN + PAUSE)) / MOVE_OUT))
             
-            # ۴. اعمال انیمیشن به واترمارک (position lambda + mask برای opacity)
+            # Frame generator برای mask (uniform grayscale array 0-255)
+            def mask_frame(t):
+                alpha = get_opacity(t)
+                frame = np.full((wm_h, wm_w), int(alpha * 255), dtype=np.uint8)
+                return frame
+            
+            # ۴. اعمال انیمیشن به واترمارک (position lambda + ColorClip mask)
+            mask_clip = (ColorClip(size=(wm_w, wm_h), color=0, duration=duration, ismask=True)
+                         .set_make_frame(mask_frame))
+            
             wm = (wm_base
                   .set_duration(duration)
                   .set_position(lambda t: (x_pos(t), y_pos(t)))
-                  .set_mask(ImageClip(size=(wm_w, wm_h), color=(0,0,0), ismask=True)
-                            .set_duration(duration)
-                            .set_position(lambda t: (0, 0))  # mask رو روی wm_base overlay کن
-                            .resize((wm_w, wm_h))
-                            .set_make_frame(lambda t: opacity_func(t)[:, np.newaxis, np.newaxis])))  # mask frame با opacity
+                  .set_mask(mask_clip))
             
             # ۵. کامپوزیت و export
             final = CompositeVideoClip([video, wm], size=video.size)
@@ -196,6 +202,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             # بستن کلیپ‌ها برای free memory
             video.close()
             wm_base.close()
+            mask_clip.close()
             wm.close()
             final.close()
             
