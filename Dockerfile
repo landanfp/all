@@ -1,15 +1,17 @@
-# استفاده از Debian 10 (Buster) برای اطمینان از نصب FFmpeg نسخه قدیمی‌تر و پایدارتر
-FROM python:3.8-slim-buster
+# استفاده از Alpine Linux برای تضمین یک محیط کوچک و پایدار
+FROM python:3.10-alpine
 
-# نصب ابزارهای مورد نیاز
-# این دستور حالا باید FFmpeg نسخه 4.x را نصب کند.
-RUN apt-get update && apt-get install -y \
+# نصب ابزارهای مورد نیاز از طریق apk (مدیر پکیج Alpine)
+# این کار معمولاً یک FFmpeg نسخه 4.x یا 5.x را نصب می‌کند که پایدارتر است.
+RUN apk add --no-cache \
     ffmpeg \
     imagemagick \
-    libx11-6 \
-    libxext6 \
-    libsm6 \
-    && rm -rf /var/lib/apt/lists/*
+    libx11 \
+    libxext \
+    libsm \
+    # نیاز به این پکیج‌ها برای MoviePy و Pillow در Alpine
+    ttf-dejavu \
+    && rm -rf /var/cache/apk/*
 
 # تنظیم مسیر کاری
 WORKDIR /app
