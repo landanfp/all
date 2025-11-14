@@ -198,23 +198,20 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 else:
                     return ALPHA_MAX * (1 - ((c_t - (MOVE_IN + PAUSE)) / MOVE_OUT))
             
-            # --- شروع تغییرات ---
-            #
             # ۴. اعمال انیمیشن به واترمارک (position lambda + set_opacity)
-            #
-            # *** حذف `mask_frame` و `mask_clip` ***
-            # تابع `mask_frame` حذف شد.
-            # متغیر `mask_clip` حذف شد.
-
             wm = (wm_base
                   .set_duration(duration)
                   .set_position(lambda t: (x_pos(t), y_pos(t)))
-                  .set_opacity(get_opacity)) # <-- **تغییر کلیدی: استفاده از set_opacity**
+                  .set_opacity(get_opacity)) # <-- **استفاده از set_opacity (که قبلاً اضافه کردیم)**
             
-            # --- پایان تغییرات ---
-
             # ۵. کامپوزیت و export (medium preset + bitrate برای کیفیت بهتر)
             final = CompositeVideoClip([video, wm], size=video.size)
+            
+            # --- شروع تغییرات ---
+            
+            # **فیکس (1): تخصیص صریح صدا برای جلوگیری از خطای میکس**
+            final.audio = video.audio
+            
             final.write_videofile(
                 output_path,
                 codec='libx264',
@@ -223,15 +220,20 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 remove_temp=True,
                 preset='medium',  # کیفیت بهتر، کمتر artifact
                 bitrate='2000k',  # bitrate بالاتر برای sharpness
-                verbose=False,
-                logger=None,
-                threads=1  # disable multiprocessing
+                
+                # **فیکس (2): فعال کردن لاگ‌ها برای دیباگ**
+                verbose=True,   # <-- تغییر از False
+                logger='bar',   # <-- تغییر از None
+                
+                threads=1  # disable multiprocessing (طبق کد شما)
             )
             
+            # --- پایان تغییرات ---
+
             # بستن کلیپ‌ها برای free memory
             video.close()
             wm_base.close()
-            # mask_clip.close() # <--- حذف شد
+            # mask_clip.close() # (این خط قبلا حذف شده بود، درست است)
             wm.close()
             final.close()
             
