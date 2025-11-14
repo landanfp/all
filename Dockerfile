@@ -2,32 +2,46 @@
 FROM python:3.10-alpine
 
 # نصب ابزارهای مورد نیاز از طریق apk (مدیر پکیج Alpine)
-# این کار معمولاً یک FFmpeg نسخه 4.x یا 5.x را نصب می‌کند که پایدارتر است.
+# FFmpeg از apk، و build deps برای numpy/pillow/MoviePy
 RUN apk add --no-cache \
     ffmpeg \
     imagemagick \
-    libx11 \
-    libxext \
-    libsm \
-    # نیاز به این پکیج‌ها برای MoviePy و Pillow در Alpine
     ttf-dejavu \
+    # Build deps برای pip install (numpy, pillow)
+    && apk add --no-cache --virtual .build-deps \
+        gcc \
+        g++ \
+        musl-dev \
+        zlib-dev \
+        jpeg-dev \
+        libffi-dev \
+    # Clean cache
     && rm -rf /var/cache/apk/*
 
 # تنظیم مسیر کاری
 WORKDIR /app
 
-# کپی پروژه داخل کانتینر
-COPY . /app
+# کپی requirements اول (برای cache Docker layers)
+COPY requirements.txt .
 
-# نصب MoviePy و پکیج‌های مورد نیازش
+# نصب MoviePy و وابستگی‌ها (با build deps)
 RUN pip install --upgrade pip
-RUN pip install moviepy==1.0.3 imageio-ffmpeg==0.5.1
-
-# نصب سایر وابستگی‌ها
+RUN pip install --no-cache-dir moviepy==1.0.3
 RUN pip install --no-cache-dir -r requirements.txt
 
-# تست نصب moviepy (اختیاری ولی مفیده برای لاگ)
-RUN python -c "from moviepy.editor import VideoFileClip; print('MoviePy installed successfully.')"
+# Clean up build deps (image کوچیک‌تر)
+RUN apk del .build-deps
+
+# کپی بقیه پروژه
+COPY . /app
+
+# تنظیم ENV برای MoviePy (استفاده از system FFmpeg)
+ENV FFMPEG_BINARY=ffmpeg
+
+# تست نصب moviepy (بهبود: تست write ساده برای چک FFmpeg)
+RUN python -c "from moviepy.editor import VideoFileClip; \
+    clip = VideoFileClip(''); clip.close(); \
+    print('MoviePy and FFmpeg installed successfully.')"
 
 # اجرای برنامه اصلی
 CMD ["python", "bot.py"]
