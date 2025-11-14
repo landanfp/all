@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با رفع کامل اشکال نحوی با حذف نقل قول های داخلی)
+# نام فایل: helper/watermark.py (نسخه نهایی با رفع کامل اشکال نحوی با فرار از کاماها)
 import asyncio
 import os
 import subprocess
@@ -6,6 +6,13 @@ import shlex
 
 # تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
 T = "t" # متغیر زمان اصلی در FFmpeg
+
+def _escape_commas(expression):
+    """
+    فرار از کاماهای داخل یک عبارت FFmpeg.
+    این کار برای جلوگیری از شکستن عبارت توسط پوسته در محیط های خاص ضروری است.
+    """
+    return expression.replace(",", "\,")
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
     """افزودن واترمارک متنی متحرک و محوشونده به ویدیو (برای Drawtext، نقل قول ها لازمند)."""
@@ -94,7 +101,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
 # ----------------------------------------------------------------------------------
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
-    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با حذف تمام نقل قول های داخلی)."""
+    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با فرار از کاماها)."""
     
     T = "t"
     MOVE_IN_DURATION = 2
@@ -133,15 +140,15 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         ")"
     )
 
-    # 3. ساخت فیلتر `filter_complex`
+    # 3. ساخت فیلتر `filter_complex` با فرار از کاماها
     filter_complex_inner = (
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  
         
-        # 🚨 نهایی FIX: استفاده از alpha در overlay و حذف مطلق نقل قول های داخلی 🚨
-        f'[v][wm]overlay=x={X_EXPRESSION}:'
-        f'y={Y_EXPRESSION}:'
-        f'alpha={ALPHA_EXPRESSION}:'
+        # 🚨 FIX: فرار از کاماها (با استفاده از تابع کمکی) 🚨
+        f'[v][wm]overlay=x={_escape_commas(X_EXPRESSION)}:'
+        f'y={_escape_commas(Y_EXPRESSION)}:'
+        f'alpha={_escape_commas(ALPHA_EXPRESSION)}:'
         f'eof_action=repeat:shortest=0:repeatlast=0[ov];' 
         f"[ov]format=yuv420p[outv]" 
     )
