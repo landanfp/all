@@ -1,5 +1,6 @@
-# نام فایل: plugins/image_watermark.py (هندلرهای واترمارک تصویری)
+# نام فایل: plugins/image_watermark.py (هندلرهای واترمارک تصویری - فیکس Pyrogram edit error)
 from pyrogram import Client, filters
+from pyrogram.errors import MessageNotModified  # فیکس import برای except
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from helper.state import set_state, get_state, clear_state
 from helper.watermark import add_image_watermark
@@ -18,7 +19,10 @@ sizes = [10, 15, 20, 25, 30, 35, 40, 45, 50]
 async def ask_image(client, query: CallbackQuery):
     """درخواست تصویر واترمارک."""
     user_id = query.from_user.id
-    await query.message.edit("لطفا تصویری برای واترمارک ارسال کنید (فقط jpg یا png):")
+    try:
+        await query.message.edit("لطفا تصویری برای واترمارک ارسال کنید (فقط jpg یا png):")
+    except MessageNotModified:
+        pass  # ignore اگر message همون باشه (چندبار callback)
     set_state(user_id, "step", "image_upload")
     print(f"Debug: Set step to 'image_upload' for user {user_id}")  # لاگ set state
 
@@ -142,7 +146,7 @@ async def process_image_watermark(client, message: Message):
         await add_image_watermark(input_path, output_file, image, position, size)
 
         if not os.path.exists(output_file):
-             raise Exception("فایل خروجی FFmpeg تولید نشد. (احتمالاً خطای فایل یا کدک)")
+             raise Exception("فایل خروجی MoviePy تولید نشد. (احتمالاً خطای فایل یا کدک)")
 
         # مرحله آپلود
         await msg.edit("⬆️ در حال آپلود فایل نهایی...")
