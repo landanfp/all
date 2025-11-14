@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس resize method)
+# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس resize method و بهبود ظاهر)
 import asyncio
 import os
 import subprocess
@@ -107,8 +107,16 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     def process_sync():
         """تابع sync برای MoviePy (در thread جداگانه اجرا می‌شه)."""
         try:
-            # ۱. لود ویدیو
-            video = VideoFileClip(input_path)
+            # Validate input_path قبل لود
+            if not os.path.exists(input_path) or os.path.getsize(input_path) == 0:
+                raise Exception("فایل ویدیو ناقص است.")
+            
+            # ۱. لود ویدیو (با error handling)
+            try:
+                video = VideoFileClip(input_path)
+            except Exception as load_e:
+                raise Exception(f"خطا در لود ویدیو (corrupt file): {str(load_e)}")
+            
             video_w, video_h = video.size
             duration = video.duration
             
