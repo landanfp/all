@@ -88,16 +88,16 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
             error_output = stderr.decode()
             short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
             if not short_error:
-                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
+                    short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
             raise Exception(f"FFmpeg failed: {short_error[:250]}...") 
 
     except FileNotFoundError:
         raise FileNotFoundError("FFmpeg command not found. Please install FFmpeg.")
     except Exception as e:
         if "FFmpeg failed" in str(e):
-             raise e
+            raise e
         else:
-             raise Exception(f"Error during animated text watermark processing: {e}")
+            raise Exception(f"Error during animated text watermark processing: {e}")
 
 # ----------------------------------------------------------------------------------
 
@@ -188,6 +188,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             )
             
             # Function برای opacity scalar (0-ALPHA_MAX)
+            # *** این تابع اکنون مستقیماً توسط set_opacity استفاده خواهد شد ***
             def get_opacity(t):
                 c_t = get_cycle_time(t)
                 if c_t < MOVE_IN:
@@ -197,21 +198,21 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 else:
                     return ALPHA_MAX * (1 - ((c_t - (MOVE_IN + PAUSE)) / MOVE_OUT))
             
-            # Frame generator برای mask (uniform grayscale array 0-255)
-            def mask_frame(t):
-                alpha = get_opacity(t)
-                frame = np.full((wm_h, wm_w), int(alpha * 255), dtype=np.uint8)
-                return frame
-            
-            # ۴. اعمال انیمیشن به واترمارک (position lambda + ColorClip mask)
-            mask_clip = (ColorClip(size=(wm_w, wm_h), color=0, duration=duration, ismask=True)
-                         .set_make_frame(mask_frame))
-            
+            # --- شروع تغییرات ---
+            #
+            # ۴. اعمال انیمیشن به واترمارک (position lambda + set_opacity)
+            #
+            # *** حذف `mask_frame` و `mask_clip` ***
+            # تابع `mask_frame` حذف شد.
+            # متغیر `mask_clip` حذف شد.
+
             wm = (wm_base
                   .set_duration(duration)
                   .set_position(lambda t: (x_pos(t), y_pos(t)))
-                  .set_mask(mask_clip))
+                  .set_opacity(get_opacity)) # <-- **تغییر کلیدی: استفاده از set_opacity**
             
+            # --- پایان تغییرات ---
+
             # ۵. کامپوزیت و export (medium preset + bitrate برای کیفیت بهتر)
             final = CompositeVideoClip([video, wm], size=video.size)
             final.write_videofile(
@@ -230,7 +231,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             # بستن کلیپ‌ها برای free memory
             video.close()
             wm_base.close()
-            mask_clip.close()
+            # mask_clip.close() # <--- حذف شد
             wm.close()
             final.close()
             
