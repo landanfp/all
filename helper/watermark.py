@@ -1,9 +1,9 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس multiprocessing و lambda)
+# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس با set_mask برای opacity)
 import asyncio
 import os
 import subprocess
 import shlex
-import numpy as np  # برای np.mod در cycle time (safety با np.array t)
+import numpy as np  # برای np.mod و mask array
 from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip
 
 # تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
@@ -142,7 +142,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             # موقعیت خروج (همیشه به پایین)
             x_out, y_out = x_base, video_h - wm_h - 20
             
-            # Lambda برای x_pos (nested np.where برای vectorized if/else - pickle-friendly و safe با np.array)
+            # Lambda برای x_pos (np.where برای vectorized)
             x_pos = lambda t: np.where(
                 get_cycle_time(t) < MOVE_IN,
                 x_base * (get_cycle_time(t) / MOVE_IN) - wm_w * (1 - get_cycle_time(t) / MOVE_IN),
@@ -160,24 +160,26 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 y_base + (y_out - y_base) * ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT)
             )
             
-            # Lambda برای opacity
-            opacity = lambda t: np.where(
-                get_cycle_time(t) < MOVE_IN,
-                0.8 * (get_cycle_time(t) / MOVE_IN),
-                np.where(
-                    get_cycle_time(t) < MOVE_IN + PAUSE,
-                    0.8,
-                    0.8 * (1 - ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT))
-                )
-            )
+            # Function برای opacity (برای set_mask - vectorized)
+            def opacity_func(t):
+                c_t = get_cycle_time(t)
+                mask = np.zeros_like(c_t)  # array خالی
+                mask[c_t < MOVE_IN] = 0.8 * (c_t[c_t < MOVE_IN] / MOVE_IN)
+                mask[(c_t >= MOVE_IN) & (c_t < MOVE_IN + PAUSE)] = 0.8
+                mask[c_t >= MOVE_IN + PAUSE] = 0.8 * (1 - ((c_t[c_t >= MOVE_IN + PAUSE] - (MOVE_IN + PAUSE)) / MOVE_OUT))
+                return mask
             
-            # ۴. اعمال انیمیشن به واترمارک (lambdaها مستقیم پاس می‌شن)
+            # ۴. اعمال انیمیشن به واترمارک (position lambda + mask برای opacity)
             wm = (wm_base
                   .set_duration(duration)
                   .set_position(lambda t: (x_pos(t), y_pos(t)))
-                  .set_opacity(opacity))
+                  .set_mask(ImageClip(size=(wm_w, wm_h), color=(0,0,0), ismask=True)
+                            .set_duration(duration)
+                            .set_position(lambda t: (0, 0))  # mask رو روی wm_base overlay کن
+                            .resize((wm_w, wm_h))
+                            .set_make_frame(lambda t: opacity_func(t)[:, np.newaxis, np.newaxis])))  # mask frame با opacity
             
-            # ۵. کامپوزیت و export (فیکس: threads=1 برای disable multiprocessing و حل pickle/type error)
+            # ۵. کامپوزیت و export
             final = CompositeVideoClip([video, wm], size=video.size)
             final.write_videofile(
                 output_path,
@@ -186,9 +188,9 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 temp_audiofile='temp-audio.m4a',
                 remove_temp=True,
                 preset='ultrafast',  # سریع برای Koyeb
-                verbose=False,  # کمتر لاگ
+                verbose=False,
                 logger=None,
-                threads=1  # فیکس کلیدی: جلوگیری از multiprocessing pickle issues
+                threads=1  # disable multiprocessing
             )
             
             # بستن کلیپ‌ها برای free memory
