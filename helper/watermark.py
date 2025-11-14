@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy برای واترمارک تصویری - فیکس lambda)
+# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس multiprocessing و lambda)
 import asyncio
 import os
 import subprocess
@@ -142,32 +142,32 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             # موقعیت خروج (همیشه به پایین)
             x_out, y_out = x_base, video_h - wm_h - 20
             
-            # Lambda برای x_pos (nested ternary برای if/else - pickle-friendly)
-            x_pos = lambda t: (
-                x_base * (get_cycle_time(t) / MOVE_IN) - wm_w * (1 - get_cycle_time(t) / MOVE_IN)
-                if get_cycle_time(t) < MOVE_IN
-                else (
-                    x_base
-                    if get_cycle_time(t) < MOVE_IN + PAUSE
-                    else x_out
+            # Lambda برای x_pos (nested np.where برای vectorized if/else - pickle-friendly و safe با np.array)
+            x_pos = lambda t: np.where(
+                get_cycle_time(t) < MOVE_IN,
+                x_base * (get_cycle_time(t) / MOVE_IN) - wm_w * (1 - get_cycle_time(t) / MOVE_IN),
+                np.where(
+                    get_cycle_time(t) < MOVE_IN + PAUSE,
+                    x_base,
+                    x_out
                 )
             )
             
             # Lambda برای y_pos
-            y_pos = lambda t: (
-                y_base
-                if get_cycle_time(t) < MOVE_IN + PAUSE
-                else y_base + (y_out - y_base) * ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT)
+            y_pos = lambda t: np.where(
+                get_cycle_time(t) < MOVE_IN + PAUSE,
+                y_base,
+                y_base + (y_out - y_base) * ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT)
             )
             
             # Lambda برای opacity
-            opacity = lambda t: (
-                0.8 * (get_cycle_time(t) / MOVE_IN)
-                if get_cycle_time(t) < MOVE_IN
-                else (
-                    0.8
-                    if get_cycle_time(t) < MOVE_IN + PAUSE
-                    else 0.8 * (1 - ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT))
+            opacity = lambda t: np.where(
+                get_cycle_time(t) < MOVE_IN,
+                0.8 * (get_cycle_time(t) / MOVE_IN),
+                np.where(
+                    get_cycle_time(t) < MOVE_IN + PAUSE,
+                    0.8,
+                    0.8 * (1 - ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT))
                 )
             )
             
@@ -177,7 +177,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                   .set_position(lambda t: (x_pos(t), y_pos(t)))
                   .set_opacity(opacity))
             
-            # ۵. کامپوزیت و export
+            # ۵. کامپوزیت و export (فیکس: threads=1 برای disable multiprocessing و حل pickle/type error)
             final = CompositeVideoClip([video, wm], size=video.size)
             final.write_videofile(
                 output_path,
@@ -185,9 +185,10 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 audio_codec='aac',
                 temp_audiofile='temp-audio.m4a',
                 remove_temp=True,
-                preset='medium',  # سریع‌تر از veryfast FFmpeg
+                preset='ultrafast',  # سریع برای Koyeb
                 verbose=False,  # کمتر لاگ
-                logger=None
+                logger=None,
+                threads=1  # فیکس کلیدی: جلوگیری از multiprocessing pickle issues
             )
             
             # بستن کلیپ‌ها برای free memory
