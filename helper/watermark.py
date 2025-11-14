@@ -1,9 +1,10 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس broken pipe و validate)
+# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس set_format و duration parse)
 import asyncio
 import os
 import subprocess
 import shlex
 import numpy as np  # برای np.mod و mask array
+import json  # برای json parse duration
 from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip, ColorClip
 
 # تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
@@ -110,11 +111,20 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             if not os.path.exists(input_path) or os.path.getsize(input_path) == 0:
                 raise Exception("فایل ویدیو ناقص است.")
             
-            # چک duration با ffprobe (برای moov atom)
+            # چک duration با ffprobe (json parse فیکس)
             cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", input_path]
             process = subprocess.run(cmd, capture_output=True, text=True)
-            if process.returncode != 0 or '"duration"' not in process.stdout or float(process.stdout.split('"duration":')[1].split(',')[0]) == 0:
-                raise Exception("فایل ویدیو corrupt است (moov atom not found). لطفا فایل سالم ارسال کنید.")
+            if process.returncode != 0:
+                raise Exception("ffprobe fail - فایل corrupt.")
+            
+            try:
+                data = json.loads(process.stdout)
+                duration_str = data['format'].get('duration', '0')
+                duration_float = float(duration_str) if duration_str else 0
+                if duration_float == 0:
+                    raise Exception("فایل ویدیو corrupt است (duration 0).")
+            except (json.JSONDecodeError, ValueError) as parse_e:
+                raise Exception(f"Parse error in ffprobe: {str(parse_e)}")
             
             # ۱. لود ویدیو (با error handling)
             try:
@@ -126,21 +136,23 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             duration = video.duration
             fps = video.fps
             
-            # ۲. لود و تنظیم تصویر واترمارک (transparent برای PNG)
+            # ۲. لود و تنظیم تصویر واترمارک (transparent برای PNG، بدون set_format)
             is_transparent = image_path.lower().endswith('.png')
             wm_base = ImageClip(image_path, transparent=is_transparent).resize(height=video_h * size_percent / 100)
-            wm_base = wm_base.set_format('RGBA')  # RGBA برای blending
+            # فیکس: بدون set_format (فقط RGBA برای PNG default)
             wm_w, wm_h = wm_base.size
             
-            # ۳. تنظیمات انیمیشن
-            MOVE_IN = 2.0
+            # ۳. تنظیمات انیمیشن (مثل FFmpeg)
+            MOVE_IN = 2.0  # float برای safety
             PAUSE = 4.0
             MOVE_OUT = 1.5
             CYCLE = MOVE_IN + PAUSE + MOVE_OUT
-            ALPHA_MAX = 0.6
+            ALPHA_MAX = 0.6  # کمتر کدر برای visibility بهتر
             
+            # Lambda برای cycle time (با np.mod برای np.array t)
             get_cycle_time = lambda t: np.mod(t, CYCLE)
             
+            # محاسبه موقعیت پایه بر اساس position (margin کمتر برای visibility)
             pos_base = {
                 "top_right": (video_w - wm_w - 10, 10),
                 "top_center": ((video_w - wm_w) / 2, 10),
@@ -152,10 +164,12 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 "bottom_center": ((video_w - wm_w) / 2, video_h - wm_h - 10),
                 "bottom_left": (10, video_h - wm_h - 10)
             }
-            x_base, y_base = pos_base.get(position, (video_w - wm_w - 10, 10))
+            x_base, y_base = pos_base.get(position, (video_w - wm_w - 10, 10))  # default top_right
             
+            # موقعیت خروج (همیشه به پایین)
             x_out, y_out = x_base, video_h - wm_h - 10
             
+            # Lambda برای x_pos (np.where برای vectorized)
             x_pos = lambda t: np.where(
                 get_cycle_time(t) < MOVE_IN,
                 x_base * (get_cycle_time(t) / MOVE_IN) - wm_w * (1 - get_cycle_time(t) / MOVE_IN),
@@ -166,12 +180,14 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 )
             )
             
+            # Lambda برای y_pos
             y_pos = lambda t: np.where(
                 get_cycle_time(t) < MOVE_IN + PAUSE,
                 y_base,
                 y_base + (y_out - y_base) * ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT)
             )
             
+            # Function برای opacity scalar (0-ALPHA_MAX)
             def get_opacity(t):
                 c_t = get_cycle_time(t)
                 if c_t < MOVE_IN:
@@ -181,11 +197,13 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 else:
                     return ALPHA_MAX * (1 - ((c_t - (MOVE_IN + PAUSE)) / MOVE_OUT))
             
+            # Frame generator برای mask (uniform grayscale array 0-255)
             def mask_frame(t):
                 alpha = get_opacity(t)
                 frame = np.full((wm_h, wm_w), int(alpha * 255), dtype=np.uint8)
                 return frame
             
+            # ۴. اعمال انیمیشن به واترمارک (position lambda + ColorClip mask)
             mask_clip = (ColorClip(size=(wm_w, wm_h), color=0, duration=duration, ismask=True)
                          .set_make_frame(mask_frame))
             
@@ -194,26 +212,22 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                   .set_position(lambda t: (x_pos(t), y_pos(t)))
                   .set_mask(mask_clip))
             
-            # ۵. کامپوزیت و export (فیکس: catch broken pipe)
+            # ۵. کامپوزیت و export (medium preset + bitrate برای کیفیت بهتر)
             final = CompositeVideoClip([video, wm], size=video.size)
-            try:
-                final.write_videofile(
-                    output_path,
-                    codec='libx264',
-                    audio_codec='aac',
-                    temp_audiofile='temp-audio.m4a',
-                    remove_temp=True,
-                    preset='medium',
-                    bitrate='2000k',
-                    verbose=False,
-                    logger=None,
-                    threads=1
-                )
-            except BrokenPipeError:
-                raise Exception("FFmpeg pipe fail (broken pipe) - احتمالاً فایل corrupt. لطفا ویدیو سالم ارسال کنید.")
-            except Exception as pipe_e:
-                raise Exception(f"Export error (broken pipe or FFmpeg fail): {str(pipe_e)}")
+            final.write_videofile(
+                output_path,
+                codec='libx264',
+                audio_codec='aac',
+                temp_audiofile='temp-audio.m4a',
+                remove_temp=True,
+                preset='medium',  # کیفیت بهتر، کمتر artifact
+                bitrate='2000k',  # bitrate بالاتر برای sharpness
+                verbose=False,
+                logger=None,
+                threads=1  # disable multiprocessing
+            )
             
+            # بستن کلیپ‌ها برای free memory
             video.close()
             wm_base.close()
             mask_clip.close()
@@ -226,4 +240,5 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         except Exception as e:
             raise Exception(f"MoviePy error: {str(e)}")
     
+    # اجرا در thread جداگانه (چون MoviePy CPU-intensiveه)
     await asyncio.to_thread(process_sync)
