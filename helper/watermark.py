@@ -147,6 +147,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             CYCLE = MOVE_IN + PAUSE + MOVE_OUT
             ALPHA_MAX = 0.6
             
+            # تعریف تابع زمان چرخه
             get_cycle_time = lambda t: np.mod(t, CYCLE)
             
             # محاسبه موقعیت پایه
@@ -165,31 +166,32 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             
             x_out, y_out = x_base, video_h - wm_h - 10
             
-            # --- شروع فیکس ---
+            # --- شروع فیکس نهایی (استفاده از یک تابع جامع) ---
             
-            # Lambda برای x_pos (فیکس فراخوانی get_cycle_time(t))
-            x_pos = lambda t: np.where(
-                get_cycle_time(t) < MOVE_IN,
-                # (t) به هر دو فراخوانی اضافه شد
-                x_base * (get_cycle_time(t) / MOVE_IN) - wm_w * (1 - get_cycle_time(t) / MOVE_IN),
-                np.where(
-                    get_cycle_time(t) < MOVE_IN + PAUSE,
-                    x_base,
-                    x_out
+            def get_position_and_opacity(t):
+                """محاسبه یکپارچه c_t و اعمال منطق np.where."""
+                # c_t یک مقدار عددی (یا آرایه عددی NumPy) است، نه یک تابع
+                c_t = get_cycle_time(t) 
+
+                # ۱. محاسبه X
+                x = np.where(
+                    c_t < MOVE_IN,
+                    x_base * (c_t / MOVE_IN) - wm_w * (1 - c_t / MOVE_IN),
+                    np.where(
+                        c_t < MOVE_IN + PAUSE,
+                        x_base,
+                        x_out
+                    )
                 )
-            )
-            
-            # Lambda برای y_pos (این مورد از قبل درست بود)
-            y_pos = lambda t: np.where(
-                get_cycle_time(t) < MOVE_IN + PAUSE,
-                y_base,
-                y_base + (y_out - y_base) * ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT)
-            )
-            
-            # Function برای opacity (این مورد از قبل درست بود)
-            def get_opacity(t):
-                c_t = get_cycle_time(t)
-                
+
+                # ۲. محاسبه Y
+                y = np.where(
+                    c_t < MOVE_IN + PAUSE,
+                    y_base,
+                    y_base + (y_out - y_base) * ((c_t - (MOVE_IN + PAUSE)) / MOVE_OUT)
+                )
+
+                # ۳. محاسبه Opacity
                 conditions = [
                     c_t < MOVE_IN,
                     (c_t >= MOVE_IN) & (c_t < (MOVE_IN + PAUSE)),
@@ -200,17 +202,26 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                     lambda x: ALPHA_MAX,
                     lambda x: ALPHA_MAX * (1 - ((x - (MOVE_IN + PAUSE)) / MOVE_OUT))
                 ]
-                return np.piecewise(c_t, conditions, functions)
+                opacity = np.piecewise(c_t, conditions, functions)
 
-            # --- پایان فیکس ---
+                return (x, y), opacity
 
-            # ۴. اعمال انیمیشن به واترمارک
+            # ۴. توابع Wrapper برای MoviePy
+            def final_pos(t):
+                return get_position_and_opacity(t)[0]
+
+            def final_opacity(t):
+                return get_position_and_opacity(t)[1]
+
+            # ۵. اعمال انیمیشن
             wm = (wm_base
                   .set_duration(duration)
-                  .set_position(lambda t: (x_pos(t), y_pos(t)))
-                  .set_opacity(get_opacity))
+                  .set_position(final_pos) # استفاده از تابع Wrapper
+                  .set_opacity(final_opacity)) # استفاده از تابع Wrapper
             
-            # ۵. کامپوزیت و export
+            # --- پایان فیکس نهایی ---
+
+            # ۶. کامپوزیت و export
             final = CompositeVideoClip([video, wm], size=video.size)
             
             if video.audio:
