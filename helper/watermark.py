@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با رفع کامل اشکال نحوی lut/luta و نمایش کامل خطا)
+# نام فایل: helper/watermark.py (نسخه نهایی با رفع کامل اشکال منطقی FFmpeg در lut/luta)
 import asyncio
 import os
 import subprocess
@@ -130,24 +130,25 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         ")"
     )
 
-    filter_complex = (
+    # 4. ساخت فیلتر `filter_complex` 
+    filter_complex_inner = (
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  
         
-        # 🚨 اصلاح نهایی: قرار دادن عبارت آلفا در نقل قول تکی برای حل مشکل نحوی FFmpeg 7+
-        f"[wm]luty=val:luta='val*{ALPHA_EXPRESSION}'[wma];" 
+        # 🚨 اصلاح نهایی: تنظیم مستقیم لوت آلفا به جای ترکیب با val* 🚨
+        f'[wm]luty=val:luta="{ALPHA_EXPRESSION}"[wma];' 
         
-        # اعمال انیمیشن X و Y در فیلتر overlay 
-        f"[v][wma]overlay=x='{X_EXPRESSION}':"
-        f"y='{Y_EXPRESSION}':"
-        f"eof_action=repeat:shortest=0:repeatlast=0[ov];" 
+        # در overlay، از نقل قول دوتایی استفاده می کنیم.
+        f'[v][wma]overlay=x="{X_EXPRESSION}":'
+        f'y="{Y_EXPRESSION}":'
+        f'eof_action=repeat:shortest=0:repeatlast=0[ov];' 
         f"[ov]format=yuv420p[outv]" 
     )
 
-    # 5. ساخت دستور FFmpeg (پارامترهای کوتاه و ایمن شده)
+    # 5. ساخت دستور FFmpeg (استفاده از نقل قول تکی برای کل filter_complex)
     cmd = (
         f"ffmpeg -i \"{input_path}\" -i \"{image_path}\" "
-        f"-filter_complex \"{filter_complex}\" "
+        f"-filter_complex '{filter_complex_inner}' " 
         f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "
         f"-map [outv] -map 0:a:0? \"{output_path}\" -y" 
     )
