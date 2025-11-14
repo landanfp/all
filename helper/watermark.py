@@ -165,9 +165,12 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             
             x_out, y_out = x_base, video_h - wm_h - 10
             
-            # Lambda برای x_pos
+            # --- شروع فیکس ---
+            
+            # Lambda برای x_pos (فیکس فراخوانی get_cycle_time(t))
             x_pos = lambda t: np.where(
                 get_cycle_time(t) < MOVE_IN,
+                # (t) به هر دو فراخوانی اضافه شد
                 x_base * (get_cycle_time(t) / MOVE_IN) - wm_w * (1 - get_cycle_time(t) / MOVE_IN),
                 np.where(
                     get_cycle_time(t) < MOVE_IN + PAUSE,
@@ -176,54 +179,43 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 )
             )
             
-            # Lambda برای y_pos
+            # Lambda برای y_pos (این مورد از قبل درست بود)
             y_pos = lambda t: np.where(
                 get_cycle_time(t) < MOVE_IN + PAUSE,
                 y_base,
                 y_base + (y_out - y_base) * ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT)
             )
             
-            # --- شروع تغییرات ---
-
-            # Function برای opacity 
+            # Function برای opacity (این مورد از قبل درست بود)
             def get_opacity(t):
-                # فیکس کلیدی: c_t باید نتیجه فراخوانی تابع باشد
                 c_t = get_cycle_time(t)
                 
-                # استفاده از np.piecewise برای مدیریت صحیح آرایه‌های numpy که moviepy ارسال می‌کند
                 conditions = [
                     c_t < MOVE_IN,
                     (c_t >= MOVE_IN) & (c_t < (MOVE_IN + PAUSE)),
                     c_t >= (MOVE_IN + PAUSE)
                 ]
-                
-                # توابع متناظر با هر شرط
                 functions = [
-                    lambda x: ALPHA_MAX * (x / MOVE_IN),  # Fade in
-                    lambda x: ALPHA_MAX,                  # Pause
-                    lambda x: ALPHA_MAX * (1 - ((x - (MOVE_IN + PAUSE)) / MOVE_OUT)) # Fade out
+                    lambda x: ALPHA_MAX * (x / MOVE_IN),
+                    lambda x: ALPHA_MAX,
+                    lambda x: ALPHA_MAX * (1 - ((x - (MOVE_IN + PAUSE)) / MOVE_OUT))
                 ]
-                
-                # اعمال تابع مناسب بر اساس شرط
-                # np.piecewise به درستی هم با t=float و هم t=array کار می‌کند
                 return np.piecewise(c_t, conditions, functions)
 
+            # --- پایان فیکس ---
+
             # ۴. اعمال انیمیشن به واترمارک
-            # دیگر نیازی به mask_frame یا mask_clip نیست
             wm = (wm_base
                   .set_duration(duration)
                   .set_position(lambda t: (x_pos(t), y_pos(t)))
-                  .set_opacity(get_opacity)) # <-- استفاده از set_opacity
+                  .set_opacity(get_opacity))
             
             # ۵. کامپوزیت و export
             final = CompositeVideoClip([video, wm], size=video.size)
             
-            # فیکس Broken Pipe: صدای فایل نهایی را صراحتاً از ویدیوی اصلی بگیرید
             if video.audio:
                 final.audio = video.audio
             
-            # --- پایان تغییرات ---
-
             final.write_videofile(
                 output_path,
                 codec='libx264',
@@ -232,8 +224,8 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 remove_temp=True,
                 preset='medium',
                 bitrate='2000k', 
-                verbose=False, # برگرداندن به حالت قبلی
-                logger=None,   # برگرداندن به حالت قبلی
+                verbose=False,
+                logger=None,
                 threads=1
             )
             
@@ -247,8 +239,6 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 raise Exception("فایل خروجی تولید نشد!")
                 
         except Exception as e:
-            # لاگ کردن خطای کامل در کنسول سرور (اگر می‌خواهید)
-            # print(f"MoviePy internal error: {e}") 
             raise Exception(f"MoviePy error: {str(e)}")
     
     # اجرا در thread جداگانه
