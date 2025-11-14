@@ -6,10 +6,19 @@ import os
 # ────────────────────────────────────────────────
 async def add_text_watermark(input_path, output_path, text, position="top-left", fontsize=36):
     """
-    افزودن واترمارک متنی ساده روی ویدیو
+    افزودن واترمارک متنی ساده روی ویدیو با بررسی مسیرها
     """
+    if not os.path.isfile(input_path):
+        return f"Error: Input file does not exist: {input_path}"
+
+    output_dir = os.path.dirname(os.path.abspath(output_path))
+    if not os.path.exists(output_dir):
+        try:
+            os.makedirs(output_dir)
+        except Exception as e:
+            return f"Error: Cannot create output directory: {output_dir}, {e}"
+
     try:
-        # موقعیت‌ها
         positions = {
             "top-left": "10:10",
             "top-right": "W-tw-10:10",
@@ -25,15 +34,19 @@ async def add_text_watermark(input_path, output_path, text, position="top-left",
             "-vf",
             f"drawtext=text='{text}':fontcolor=white:fontsize={fontsize}:x={pos.split(':')[0]}:y={pos.split(':')[1]}",
             "-codec:a", "copy",
-            "-y",  # overwrite output
+            "-y",
             output_path
         ]
 
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-        return True
+
+        if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
+            return True
+        else:
+            return f"Error: Output file is empty or not created: {output_path}"
 
     except subprocess.CalledProcessError as e:
-        return f"Text watermark error: {e.stderr.decode()}"
+        return f"Text watermark FFmpeg error: {e.stderr.decode()}"
     except Exception as e:
         return f"Text watermark error: {str(e)}"
 
@@ -43,10 +56,20 @@ async def add_text_watermark(input_path, output_path, text, position="top-left",
 # ────────────────────────────────────────────────
 async def add_image_watermark(input_path, output_path, watermark_path, position="top-right", scale=0.25):
     """
-    افزودن واترمارک تصویری ساده و پایدار روی ویدیو
-    - scale: نسبت اندازه لوگو به اندازه اصلی
-    - position: top-left, top-right, bottom-left, bottom-right, center
+    افزودن واترمارک تصویری ساده روی ویدیو با بررسی مسیرها
     """
+    if not os.path.isfile(input_path):
+        return f"Error: Input file does not exist: {input_path}"
+    if not os.path.isfile(watermark_path):
+        return f"Error: Watermark image does not exist: {watermark_path}"
+
+    output_dir = os.path.dirname(os.path.abspath(output_path))
+    if not os.path.exists(output_dir):
+        try:
+            os.makedirs(output_dir)
+        except Exception as e:
+            return f"Error: Cannot create output directory: {output_dir}, {e}"
+
     try:
         positions = {
             "top-left": "10:10",
@@ -57,7 +80,6 @@ async def add_image_watermark(input_path, output_path, watermark_path, position=
         }
         pos = positions.get(position, "main_w-overlay_w-10:10")
 
-        # دستور ساده و مطمئن FFmpeg
         cmd = [
             "ffmpeg",
             "-i", input_path,
@@ -65,15 +87,19 @@ async def add_image_watermark(input_path, output_path, watermark_path, position=
             "-filter_complex",
             f"[1:v]scale=iw*{scale}:-1[wm];[0:v][wm]overlay={pos}",
             "-codec:a", "copy",
-            "-y",  # overwrite output
+            "-y",
             output_path
         ]
 
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-        return True
+
+        if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
+            return True
+        else:
+            return f"Error: Output file is empty or not created: {output_path}"
 
     except subprocess.CalledProcessError as e:
-        return f"Image watermark error: {e.stderr.decode()}"
+        return f"Image watermark FFmpeg error: {e.stderr.decode()}"
     except Exception as e:
         return f"Image watermark error: {str(e)}"
 
@@ -90,7 +116,7 @@ if __name__ == "__main__":
         video_out_image = "output_image.mp4"
         watermark_img = "logo.png"
 
-        # متن واترمارک
+        # واترمارک متنی
         result1 = await add_text_watermark(video_in, video_out_text, "Hello World", position="bottom-right")
         print(result1)
 
