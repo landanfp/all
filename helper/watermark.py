@@ -139,7 +139,6 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             # ۲. لود و تنظیم تصویر واترمارک (transparent برای PNG، بدون set_format)
             is_transparent = image_path.lower().endswith('.png')
             wm_base = ImageClip(image_path, transparent=is_transparent).resize(height=video_h * size_percent / 100)
-            # فیکس: بدون set_format (فقط RGBA برای PNG default)
             wm_w, wm_h = wm_base.size
             
             # ۳. تنظیمات انیمیشن (مثل FFmpeg)
@@ -149,7 +148,6 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             CYCLE = MOVE_IN + PAUSE + MOVE_OUT
             ALPHA_MAX = 0.6  # کمتر کدر برای visibility بهتر
             
-            # Lambda برای cycle time (با np.mod برای np.array t)
             get_cycle_time = lambda t: np.mod(t, CYCLE)
             
             # محاسبه موقعیت پایه بر اساس position (margin کمتر برای visibility)
@@ -166,10 +164,8 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             }
             x_base, y_base = pos_base.get(position, (video_w - wm_w - 10, 10))  # default top_right
             
-            # موقعیت خروج (همیشه به پایین)
             x_out, y_out = x_base, video_h - wm_h - 10
             
-            # Lambda برای x_pos (np.where برای vectorized)
             x_pos = lambda t: np.where(
                 get_cycle_time(t) < MOVE_IN,
                 x_base * (get_cycle_time(t) / MOVE_IN) - wm_w * (1 - get_cycle_time(t) / MOVE_IN),
@@ -180,36 +176,47 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 )
             )
             
-            # Lambda برای y_pos
             y_pos = lambda t: np.where(
                 get_cycle_time(t) < MOVE_IN + PAUSE,
                 y_base,
                 y_base + (y_out - y_base) * ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT)
             )
             
-            # Function برای opacity scalar (0-ALPHA_MAX)
-            # *** این تابع اکنون مستقیماً توسط set_opacity استفاده خواهد شد ***
+            # Function برای opacity
             def get_opacity(t):
-                c_t = get_cycle_time(t)
-                if c_t < MOVE_IN:
-                    return ALPHA_MAX * (c_t / MOVE_IN)
-                elif c_t < MOVE_IN + PAUSE:
-                    return ALPHA_MAX
-                else:
-                    return ALPHA_MAX * (1 - ((c_t - (MOVE_IN + PAUSE)) / MOVE_OUT))
+                # ----- فیکس -----
+                # t را به تابع پاس بدهید
+                c_t = get_cycle_time(t) 
+                # --------------
+                
+                # برای اطمینان از سازگاری با numpy array، از np.piecewise استفاده می‌کنیم
+                # (این قوی‌تر از if/elif/else است)
+                conditions = [
+                    c_t < MOVE_IN,
+                    (c_t >= MOVE_IN) & (c_t < (MOVE_IN + PAUSE)),
+                    c_t >= (MOVE_IN + PAUSE)
+                ]
+                
+                # توابع متناظر با هر شرط
+                functions = [
+                    lambda x: ALPHA_MAX * (x / MOVE_IN),  # Fade in
+                    lambda x: ALPHA_MAX,                  # Pause
+                    lambda x: ALPHA_MAX * (1 - ((x - (MOVE_IN + PAUSE)) / MOVE_OUT)) # Fade out
+                ]
+                
+                return np.piecewise(c_t, conditions, functions)
+
             
-            # ۴. اعمال انیمیشن به واترمارک (position lambda + set_opacity)
+            # ۴. اعمال انیمیشن به واترمارک
             wm = (wm_base
                   .set_duration(duration)
                   .set_position(lambda t: (x_pos(t), y_pos(t)))
-                  .set_opacity(get_opacity)) # <-- **استفاده از set_opacity (که قبلاً اضافه کردیم)**
+                  .set_opacity(get_opacity)) # استفاده از set_opacity
             
-            # ۵. کامپوزیت و export (medium preset + bitrate برای کیفیت بهتر)
+            # ۵. کامپوزیت و export
             final = CompositeVideoClip([video, wm], size=video.size)
             
-            # --- شروع تغییرات ---
-            
-            # **فیکس (1): تخصیص صریح صدا برای جلوگیری از خطای میکس**
+            # فیکس احتمالی Broken Pipe: صدای فایل نهایی را صراحتاً از ویدیوی اصلی بگیرید
             final.audio = video.audio
             
             final.write_videofile(
@@ -218,22 +225,16 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 audio_codec='aac',
                 temp_audiofile='temp-audio.m4a',
                 remove_temp=True,
-                preset='medium',  # کیفیت بهتر، کمتر artifact
-                bitrate='2000k',  # bitrate بالاتر برای sharpness
-                
-                # **فیکس (2): فعال کردن لاگ‌ها برای دیباگ**
-                verbose=True,   # <-- تغییر از False
-                logger='bar',   # <-- تغییر از None
-                
-                threads=1  # disable multiprocessing (طبق کد شما)
+                preset='medium',
+                bitrate='2000k', 
+                verbose=False,  # بازگشت به حالت اولیه
+                logger=None,    # بازگشت به حالت اولیه
+                threads=1
             )
             
-            # --- پایان تغییرات ---
-
-            # بستن کلیپ‌ها برای free memory
+            # بستن کلیپ‌ها
             video.close()
             wm_base.close()
-            # mask_clip.close() # (این خط قبلا حذف شده بود، درست است)
             wm.close()
             final.close()
             
@@ -241,7 +242,9 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 raise Exception("فایل خروجی تولید نشد!")
                 
         except Exception as e:
+            # لاگ کردن خطای کامل در کنسول سرور (اگر می‌خواهید)
+            # print(f"MoviePy internal error: {e}") 
             raise Exception(f"MoviePy error: {str(e)}")
     
-    # اجرا در thread جداگانه (چون MoviePy CPU-intensiveه)
+    # اجرا در thread جداگانه
     await asyncio.to_thread(process_sync)
