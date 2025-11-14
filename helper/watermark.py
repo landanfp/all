@@ -1,8 +1,9 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy برای واترمارک تصویری)
+# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy برای واترمارک تصویری - فیکس lambda)
 import asyncio
 import os
 import subprocess
 import shlex
+import numpy as np  # برای np.mod در cycle time (safety با np.array t)
 from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip
 
 # تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
@@ -116,14 +117,13 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             wm_w, wm_h = wm_base.size
             
             # ۳. تنظیمات انیمیشن (مثل FFmpeg)
-            MOVE_IN = 2
-            PAUSE = 4
+            MOVE_IN = 2.0  # float برای safety
+            PAUSE = 4.0
             MOVE_OUT = 1.5
             CYCLE = MOVE_IN + PAUSE + MOVE_OUT
             
-            def get_cycle_time(t):
-                """زمان در cycle (mod t برای تکرار)."""
-                return t % CYCLE
+            # Lambda برای cycle time (با np.mod برای np.array t)
+            get_cycle_time = lambda t: np.mod(t, CYCLE)
             
             # محاسبه موقعیت پایه بر اساس position
             pos_base = {
@@ -142,42 +142,36 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             # موقعیت خروج (همیشه به پایین)
             x_out, y_out = x_base, video_h - wm_h - 20
             
-            def x_pos(t):
-                c_t = get_cycle_time(t)
-                if c_t < MOVE_IN:
-                    # ورود از چپ: از -wm_w به x_base
-                    return x_base * (c_t / MOVE_IN) - wm_w * (1 - c_t / MOVE_IN)
-                elif c_t < MOVE_IN + PAUSE:
-                    # مکث: x_base ثابت
-                    return x_base
-                else:
-                    # خروج: ثابت x، به پایین (x_out = x_base)
-                    return x_out
+            # Lambda برای x_pos (nested ternary برای if/else - pickle-friendly)
+            x_pos = lambda t: (
+                x_base * (get_cycle_time(t) / MOVE_IN) - wm_w * (1 - get_cycle_time(t) / MOVE_IN)
+                if get_cycle_time(t) < MOVE_IN
+                else (
+                    x_base
+                    if get_cycle_time(t) < MOVE_IN + PAUSE
+                    else x_out
+                )
+            )
             
-            def y_pos(t):
-                c_t = get_cycle_time(t)
-                if c_t < MOVE_IN + PAUSE:
-                    # ورود و مکث: y_base ثابت
-                    return y_base
-                else:
-                    # خروج: از y_base به y_out
-                    progress_out = (c_t - (MOVE_IN + PAUSE)) / MOVE_OUT
-                    return y_base + (y_out - y_base) * progress_out
+            # Lambda برای y_pos
+            y_pos = lambda t: (
+                y_base
+                if get_cycle_time(t) < MOVE_IN + PAUSE
+                else y_base + (y_out - y_base) * ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT)
+            )
             
-            def opacity(t):
-                c_t = get_cycle_time(t)
-                if c_t < MOVE_IN:
-                    # fade in: 0 به 0.8
-                    return 0.8 * (c_t / MOVE_IN)
-                elif c_t < MOVE_IN + PAUSE:
-                    # مکث: 0.8 ثابت
-                    return 0.8
-                else:
-                    # fade out: 0.8 به 0
-                    progress_out = (c_t - (MOVE_IN + PAUSE)) / MOVE_OUT
-                    return 0.8 * (1 - progress_out)
+            # Lambda برای opacity
+            opacity = lambda t: (
+                0.8 * (get_cycle_time(t) / MOVE_IN)
+                if get_cycle_time(t) < MOVE_IN
+                else (
+                    0.8
+                    if get_cycle_time(t) < MOVE_IN + PAUSE
+                    else 0.8 * (1 - ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT))
+                )
+            )
             
-            # ۴. اعمال انیمیشن به واترمارک
+            # ۴. اعمال انیمیشن به واترمارک (lambdaها مستقیم پاس می‌شن)
             wm = (wm_base
                   .set_duration(duration)
                   .set_position(lambda t: (x_pos(t), y_pos(t)))
