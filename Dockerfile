@@ -26,6 +26,8 @@ COPY requirements.txt .
 
 # نصب MoviePy و وابستگی‌ها (با build deps)
 RUN pip install --upgrade pip
+# فیکس: Pillow 9.x برای سازگاری با MoviePy 1.0.3
+RUN pip install --no-cache-dir pillow==9.5.0
 RUN pip install --no-cache-dir moviepy==1.0.3
 RUN pip install --no-cache-dir -r requirements.txt
 
