@@ -1,13 +1,13 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس set_format و duration parse)
+# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس pixelation برای match عکس 2)
 import asyncio
 import os
 import subprocess
 import shlex
 import numpy as np  # برای np.mod و mask array
 import json  # برای json parse duration
-from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip, ColorClip
+from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip, ColorClip, vfx
 
-# تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
+# تعریف ثابت‌ها
 T = "t"  # متغیر زمان اصلی در FFmpeg
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
@@ -136,10 +136,12 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             duration = video.duration
             fps = video.fps
             
-            # ۲. لود و تنظیم تصویر واترمارک (transparent برای PNG، بدون set_format)
+            # ۲. لود و تنظیم تصویر واترمارک (transparent برای PNG، vfx.resize برای sharp)
             is_transparent = image_path.lower().endswith('.png')
-            wm_base = ImageClip(image_path, transparent=is_transparent).resize(height=video_h * size_percent / 100)
-            # فیکس: بدون set_format (فقط RGBA برای PNG default)
+            wm_base = ImageClip(image_path, transparent=is_transparent)
+            # فیکس: vfx.resize با lambda برای lanczos-like sharp (match عکس 2)
+            target_height = video_h * size_percent / 100
+            wm_base = wm_base.fx(vfx.resize, lambda img: img.resize((int(target_height * img.size[0] / img.size[1]), int(target_height)), resample=2))  # resample=2 = LANCZOS
             wm_w, wm_h = wm_base.size
             
             # ۳. تنظیمات انیمیشن (مثل FFmpeg)
@@ -147,7 +149,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             PAUSE = 4.0
             MOVE_OUT = 1.5
             CYCLE = MOVE_IN + PAUSE + MOVE_OUT
-            ALPHA_MAX = 0.6  # کمتر کدر برای visibility بهتر
+            ALPHA_MAX = 0.7  # match brightness ~9 in عکس 2
             
             # Lambda برای cycle time (با np.mod برای np.array t)
             get_cycle_time = lambda t: np.mod(t, CYCLE)
@@ -212,7 +214,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                   .set_position(lambda t: (x_pos(t), y_pos(t)))
                   .set_mask(mask_clip))
             
-            # ۵. کامپوزیت و export (medium preset + bitrate برای کیفیت بهتر)
+            # ۵. کامپوزیت و export (crf 10 + yuv444p برای sharp مثل عکس 2)
             final = CompositeVideoClip([video, wm], size=video.size)
             final.write_videofile(
                 output_path,
@@ -220,11 +222,13 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 audio_codec='aac',
                 temp_audiofile='temp-audio.m4a',
                 remove_temp=True,
-                preset='medium',  # کیفیت بهتر، کمتر artifact
-                bitrate='2000k',  # bitrate بالاتر برای sharpness
+                preset='medium',  # کیفیت بهتر
+                bitrate='5000k',  # فیکس: بالاتر برای sharpness
+                fps=fps,  # fps اصلی
+                ffmpeg_params=['-crf', '10', '-pix_fmt', 'yuv444p'],  # فیکس: crf پایین + yuv444p برای clean blending
                 verbose=False,
                 logger=None,
-                threads=1  # disable multiprocessing
+                threads=1
             )
             
             # بستن کلیپ‌ها برای free memory
@@ -240,5 +244,4 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         except Exception as e:
             raise Exception(f"MoviePy error: {str(e)}")
     
-    # اجرا در thread جداگانه (چون MoviePy CPU-intensiveه)
     await asyncio.to_thread(process_sync)
