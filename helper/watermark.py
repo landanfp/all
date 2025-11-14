@@ -1,127 +1,212 @@
-import subprocess
+# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy برای واترمارک تصویری)
+import asyncio
 import os
+import subprocess
+import shlex
+from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip
 
-# ────────────────────────────────────────────────
-#   TEXT WATERMARK
-# ────────────────────────────────────────────────
-async def add_text_watermark(input_path, output_path, text, position="top-left", fontsize=36):
-    """
-    افزودن واترمارک متنی ساده روی ویدیو با بررسی مسیرها
-    """
-    if not os.path.isfile(input_path):
-        return f"Error: Input file does not exist: {input_path}"
+# تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
+# NOTE: از آنجایی که CYCLE_DURATION در هر تابع تغییر می‌کند، باید داخل توابع تعریف شود.
+T = "t"  # متغیر زمان اصلی در FFmpeg
 
-    output_dir = os.path.dirname(os.path.abspath(output_path))
-    if not os.path.exists(output_dir):
-        try:
-            os.makedirs(output_dir)
-        except Exception as e:
-            return f"Error: Cannot create output directory: {output_dir}, {e}"
+async def add_text_watermark(input_path, output_path, text, position, size_percent):
+    """افزودن واترمارک متنی متحرک و محوشونده به ویدیو (با تکرار حلقوی)."""
+    
+    # 1. تنظیمات زمان‌بندی انیمیشن (ورود 2، مکث 4، خروج 1.5)
+    MOVE_IN_DURATION = 2
+    PAUSE_DURATION = 4
+    MOVE_OUT_DURATION = 1.5 
+    CYCLE_DURATION = MOVE_IN_DURATION + PAUSE_DURATION + MOVE_OUT_DURATION
+    MOD_T = f"mod({T},{CYCLE_DURATION})"
+    
+    # 2. محاسبه مختصات نهایی در مرحله مکث (هدف: بالا-راست)
+    FINAL_X_PAUSE = "main_w-text_w-20" 
+    FINAL_Y_PAUSE = "20" 
+    
+    # 3. محاسبه مختصات نهایی برای خروج (مستقیم به پایین)
+    FINAL_X_OUT = FINAL_X_PAUSE 
+    FINAL_Y_OUT = "main_h-text_h-20" 
 
+    # 4. تعریف انیمیشن (Expressionها)
+    
+    # A. موقعیت X: ورود از چپ، توقف در راست، ثابت تا خروج
+    X_EXPRESSION = (
+        f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
+            f"({FINAL_X_PAUSE}) * {MOD_T} / {MOVE_IN_DURATION} - text_w * (1 - {MOD_T} / {MOVE_IN_DURATION}), "
+        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
+            f"{FINAL_X_PAUSE}, "
+            f"{FINAL_X_OUT})" 
+        ")"
+    )
+
+    # B. موقعیت Y: توقف در بالا، حرکت مستقیم به پایین در زمان خروج
+    Y_EXPRESSION = (
+        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), " 
+            f"{FINAL_Y_PAUSE}, "
+            f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
+    )
+    
+    # C. محو شدن Alpha: محو شدن سریعتر
+    ALPHA_EXPRESSION = (
+        f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
+            f"0.8 * {MOD_T} / {MOVE_IN_DURATION}, "
+        f"if(lt({MOD_T},{MOVE_IN_DURATION + PAUSE_DURATION}), "
+            f"0.8, "
+            f"0.8 * (1 - ({MOD_T} - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION}))"
+        ")"
+    )
+
+    # 5. تعریف فیلتر Drawtext
+    safe_text = shlex.quote(text)
+    
+    drawtext_loop = (
+        f"drawtext=text={safe_text}:fontcolor=white:" 
+        f"fontsize=h*{size_percent}/100:shadowcolor=black@0.4:shadowx=2:shadowy=2:"
+        f"x='{X_EXPRESSION}':"
+        f"y='{Y_EXPRESSION}':"
+        f"alpha='{ALPHA_EXPRESSION}'" 
+    )
+
+    # 6. ساخت دستور FFmpeg
+    cmd = (
+        f"ffmpeg -i \"{input_path}\" -vf \"{drawtext_loop}\" "
+        f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "
+        f"-map 0:v:0 -map 0:a:0? \"{output_path}\" -y"
+    )
+    
+    # 7. اجرای ایمن FFmpeg (کوتاه کردن پیام خطا)
     try:
-        positions = {
-            "top-left": "10:10",
-            "top-right": "W-tw-10:10",
-            "bottom-left": "10:H-th-10",
-            "bottom-right": "W-tw-10:H-th-10",
-            "center": "(W-tw)/2:(H-th)/2"
-        }
-        pos = positions.get(position, "10:10")
+        process = await asyncio.create_subprocess_exec(
+            *shlex.split(cmd), 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode != 0:
+            error_output = stderr.decode()
+            short_error = error_output.split("Error reinitializing filters!")[-1].strip().split("\n")[0]
+            if not short_error:
+                 short_error = error_output.split("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from ")[0].strip()
+            raise Exception(f"FFmpeg failed: {short_error[:250]}...") 
 
-        cmd = [
-            "ffmpeg",
-            "-i", input_path,
-            "-vf",
-            f"drawtext=text='{text}':fontcolor=white:fontsize={fontsize}:x={pos.split(':')[0]}:y={pos.split(':')[1]}",
-            "-codec:a", "copy",
-            "-y",
-            output_path
-        ]
-
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-
-        if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
-            return True
-        else:
-            return f"Error: Output file is empty or not created: {output_path}"
-
-    except subprocess.CalledProcessError as e:
-        return f"Text watermark FFmpeg error: {e.stderr.decode()}"
+    except FileNotFoundError:
+        raise FileNotFoundError("FFmpeg command not found. Please install FFmpeg.")
     except Exception as e:
-        return f"Text watermark error: {str(e)}"
+        if "FFmpeg failed" in str(e):
+             raise e
+        else:
+             raise Exception(f"Error during animated text watermark processing: {e}")
 
+# ----------------------------------------------------------------------------------
 
-# ────────────────────────────────────────────────
-#   IMAGE WATERMARK
-# ────────────────────────────────────────────────
-async def add_image_watermark(input_path, output_path, watermark_path, position="top-right", scale=0.25):
-    """
-    افزودن واترمارک تصویری ساده روی ویدیو با بررسی مسیرها
-    """
-    if not os.path.isfile(input_path):
-        return f"Error: Input file does not exist: {input_path}"
-    if not os.path.isfile(watermark_path):
-        return f"Error: Watermark image does not exist: {watermark_path}"
-
-    output_dir = os.path.dirname(os.path.abspath(output_path))
-    if not os.path.exists(output_dir):
+async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
+    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با تکرار حلقوی) با MoviePy."""
+    
+    def process_sync():
+        """تابع sync برای MoviePy (در thread جداگانه اجرا می‌شه)."""
         try:
-            os.makedirs(output_dir)
+            # ۱. لود ویدیو
+            video = VideoFileClip(input_path)
+            video_w, video_h = video.size
+            duration = video.duration
+            
+            # ۲. لود و تنظیم تصویر واترمارک
+            wm_base = ImageClip(image_path).resize(height=video_h * size_percent / 100)
+            wm_w, wm_h = wm_base.size
+            
+            # ۳. تنظیمات انیمیشن (مثل FFmpeg)
+            MOVE_IN = 2
+            PAUSE = 4
+            MOVE_OUT = 1.5
+            CYCLE = MOVE_IN + PAUSE + MOVE_OUT
+            
+            def get_cycle_time(t):
+                """زمان در cycle (mod t برای تکرار)."""
+                return t % CYCLE
+            
+            # محاسبه موقعیت پایه بر اساس position
+            pos_base = {
+                "top_right": (video_w - wm_w - 20, 20),
+                "top_center": ((video_w - wm_w) / 2, 20),
+                "top_left": (20, 20),
+                "center_right": (video_w - wm_w - 20, (video_h - wm_h) / 2),
+                "center": ((video_w - wm_w) / 2, (video_h - wm_h) / 2),
+                "center_left": (20, (video_h - wm_h) / 2),
+                "bottom_right": (video_w - wm_w - 20, video_h - wm_h - 20),
+                "bottom_center": ((video_w - wm_w) / 2, video_h - wm_h - 20),
+                "bottom_left": (20, video_h - wm_h - 20)
+            }
+            x_base, y_base = pos_base.get(position, (video_w - wm_w - 20, 20))  # default top_right
+            
+            # موقعیت خروج (همیشه به پایین)
+            x_out, y_out = x_base, video_h - wm_h - 20
+            
+            def x_pos(t):
+                c_t = get_cycle_time(t)
+                if c_t < MOVE_IN:
+                    # ورود از چپ: از -wm_w به x_base
+                    return x_base * (c_t / MOVE_IN) - wm_w * (1 - c_t / MOVE_IN)
+                elif c_t < MOVE_IN + PAUSE:
+                    # مکث: x_base ثابت
+                    return x_base
+                else:
+                    # خروج: ثابت x، به پایین (x_out = x_base)
+                    return x_out
+            
+            def y_pos(t):
+                c_t = get_cycle_time(t)
+                if c_t < MOVE_IN + PAUSE:
+                    # ورود و مکث: y_base ثابت
+                    return y_base
+                else:
+                    # خروج: از y_base به y_out
+                    progress_out = (c_t - (MOVE_IN + PAUSE)) / MOVE_OUT
+                    return y_base + (y_out - y_base) * progress_out
+            
+            def opacity(t):
+                c_t = get_cycle_time(t)
+                if c_t < MOVE_IN:
+                    # fade in: 0 به 0.8
+                    return 0.8 * (c_t / MOVE_IN)
+                elif c_t < MOVE_IN + PAUSE:
+                    # مکث: 0.8 ثابت
+                    return 0.8
+                else:
+                    # fade out: 0.8 به 0
+                    progress_out = (c_t - (MOVE_IN + PAUSE)) / MOVE_OUT
+                    return 0.8 * (1 - progress_out)
+            
+            # ۴. اعمال انیمیشن به واترمارک
+            wm = (wm_base
+                  .set_duration(duration)
+                  .set_position(lambda t: (x_pos(t), y_pos(t)))
+                  .set_opacity(opacity))
+            
+            # ۵. کامپوزیت و export
+            final = CompositeVideoClip([video, wm], size=video.size)
+            final.write_videofile(
+                output_path,
+                codec='libx264',
+                audio_codec='aac',
+                temp_audiofile='temp-audio.m4a',
+                remove_temp=True,
+                preset='medium',  # سریع‌تر از veryfast FFmpeg
+                verbose=False,  # کمتر لاگ
+                logger=None
+            )
+            
+            # بستن کلیپ‌ها برای free memory
+            video.close()
+            wm_base.close()
+            wm.close()
+            final.close()
+            
+            if not os.path.exists(output_path):
+                raise Exception("فایل خروجی تولید نشد!")
+                
         except Exception as e:
-            return f"Error: Cannot create output directory: {output_dir}, {e}"
-
-    try:
-        positions = {
-            "top-left": "10:10",
-            "top-right": "main_w-overlay_w-10:10",
-            "bottom-left": "10:main_h-overlay_h-10",
-            "bottom-right": "main_w-overlay_w-10:main_h-overlay_h-10",
-            "center": "(main_w-overlay_w)/2:(main_h-overlay_h)/2"
-        }
-        pos = positions.get(position, "main_w-overlay_w-10:10")
-
-        cmd = [
-            "ffmpeg",
-            "-i", input_path,
-            "-i", watermark_path,
-            "-filter_complex",
-            f"[1:v]scale=iw*{scale}:-1[wm];[0:v][wm]overlay={pos}",
-            "-codec:a", "copy",
-            "-y",
-            output_path
-        ]
-
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-
-        if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
-            return True
-        else:
-            return f"Error: Output file is empty or not created: {output_path}"
-
-    except subprocess.CalledProcessError as e:
-        return f"Image watermark FFmpeg error: {e.stderr.decode()}"
-    except Exception as e:
-        return f"Image watermark error: {str(e)}"
-
-
-# ────────────────────────────────────────────────
-#   نمونه اجرا (Test)
-# ────────────────────────────────────────────────
-if __name__ == "__main__":
-    import asyncio
-
-    async def test():
-        video_in = "input.mp4"
-        video_out_text = "output_text.mp4"
-        video_out_image = "output_image.mp4"
-        watermark_img = "logo.png"
-
-        # واترمارک متنی
-        result1 = await add_text_watermark(video_in, video_out_text, "Hello World", position="bottom-right")
-        print(result1)
-
-        # واترمارک تصویری
-        result2 = await add_image_watermark(video_in, video_out_image, watermark_img, position="top-left", scale=0.2)
-        print(result2)
-
-    asyncio.run(test())
+            raise Exception(f"MoviePy error: {str(e)}")
+    
+    # اجرا در thread جداگانه (چون MoviePy CPU-intensiveه)
+    await asyncio.to_thread(process_sync)
