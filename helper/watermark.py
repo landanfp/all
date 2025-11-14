@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با ساده‌سازی نهایی عبارات FFmpeg)
+# نام فایل: helper/watermark.py (نسخه نهایی با رفع کامل اشکال نحوی لوت آلفا)
 import asyncio
 import os
 import subprocess
@@ -8,7 +8,7 @@ import shlex
 T = "t" # متغیر زمان اصلی در FFmpeg
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
-    """افزودن واترمارک متنی متحرک و محوشونده به ویدیو (با تکرار حلقوی)."""
+    """افزودن واترمارک متنی متحرک و محوشونده به ویدیو (بدون تغییر نسبت به نسخه قبلی)."""
     
     # 1. تنظیمات زمان‌بندی انیمیشن 
     MOVE_IN_DURATION = 2
@@ -24,7 +24,6 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     FINAL_Y_OUT = "main_h-text_h-20" 
 
     # 3. تعریف انیمیشن (Expressionها) 
-    # توجه: عبارات در اینجا همچنان نیاز به نقل قول دارند زیرا توسط Drawtext/FFmpeg به این شکل نیاز دارند.
     X_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
             f"({FINAL_X_PAUSE}) * {MOD_T} / {MOVE_IN_DURATION} - text_w * (1 - {MOD_T} / {MOVE_IN_DURATION}), "
@@ -94,7 +93,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
 # ----------------------------------------------------------------------------------
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
-    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با نمایش کامل خطا)."""
+    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (استفاده از گزینه alpha در overlay)."""
     
     T = "t"
     MOVE_IN_DURATION = 2
@@ -107,7 +106,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     FINAL_X_OUT = FINAL_X_PAUSE
     FINAL_Y_OUT = "main_h-overlay_h-20" 
 
-    # 2. ایجاد عبارات در یک خط (بدون نقل قول درونی)
+    # 1. عبارات X و Y (نیاز به نقل قول درونی دارند)
     X_EXPRESSION = (
         f"if(lt(mod(t,{CYCLE_DURATION}),{MOVE_IN_DURATION}), " 
             f"({FINAL_X_PAUSE}) * mod(t,{CYCLE_DURATION}) / {MOVE_IN_DURATION} - overlay_w * (1 - mod(t,{CYCLE_DURATION}) / {MOVE_IN_DURATION}), "
@@ -123,7 +122,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * (mod(t,{CYCLE_DURATION}) - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
     )
     
-    # 3. ایجاد عبارت آلفا در یک خط (بدون نقل قول درونی)
+    # 2. عبارت آلفا (نیاز به نقل قول درونی دارد)
     ALPHA_EXPRESSION = (
         f"if(lt(mod(t,{CYCLE_DURATION}),{MOVE_IN_DURATION}), " 
             f"mod(t,{CYCLE_DURATION}) / {MOVE_IN_DURATION}, "
@@ -133,30 +132,28 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         ")"
     )
 
-    # 4. ساخت فیلتر `filter_complex` (استفاده از نقل قول دوتایی برای کل فیلتر)
-    filter_complex = (
+    # 3. ساخت فیلتر `filter_complex`
+    filter_complex_inner = (
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  
         
-        # 🚨 ساده‌سازی نهایی: هیچ نقل قولی اطراف عبارت آلفا نیست 🚨
-        f"[wm]luty=val:luta={ALPHA_EXPRESSION}[wma];" 
-        
-        # اعمال انیمیشن X و Y در فیلتر overlay (هیچ نقل قولی اطراف X و Y نیست)
-        f"[v][wma]overlay=x={X_EXPRESSION}:"
-        f"y={Y_EXPRESSION}:"
-        f"eof_action=repeat:shortest=0:repeatlast=0[ov];" 
+        # 🚨 FIX: استفاده از alpha در overlay (که از نظر نحوی بسیار قوی‌تر است) 🚨
+        f'[v][wm]overlay=x="{X_EXPRESSION}":'
+        f'y="{Y_EXPRESSION}":'
+        f'alpha="{ALPHA_EXPRESSION}":' # <-- اعمال مستقیم انیمیشن آلفا
+        f'eof_action=repeat:shortest=0:repeatlast=0[ov];' 
         f"[ov]format=yuv420p[outv]" 
     )
 
-    # 5. ساخت دستور FFmpeg (استفاده از نقل قول دوتایی برای کل filter_complex)
+    # 4. ساخت دستور FFmpeg (استفاده از نقل قول تکی برای کل filter_complex)
     cmd = (
         f"ffmpeg -i \"{input_path}\" -i \"{image_path}\" "
-        f"-filter_complex \"{filter_complex}\" " 
+        f"-filter_complex '{filter_complex_inner}' " 
         f"-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "
         f"-map [outv] -map 0:a:0? \"{output_path}\" -y" 
     )
     
-    # 6. اجرای ایمن FFmpeg - 🛑 نمایش کامل خروجی خطا
+    # 5. اجرای ایمن FFmpeg - 🛑 نمایش کامل خروجی خطا
     try:
         cmd_list = shlex.split(cmd) 
         
