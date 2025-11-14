@@ -1,6 +1,8 @@
-FROM python:3.9-slim
+# استفاده از Debian 10 (Buster) برای اطمینان از نصب FFmpeg نسخه قدیمی‌تر و پایدارتر
+FROM python:3.8-slim-buster
 
 # نصب ابزارهای مورد نیاز
+# این دستور حالا باید FFmpeg نسخه 4.x را نصب کند.
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     imagemagick \
