@@ -35,13 +35,15 @@ RUN apk del .build-deps
 # کپی بقیه پروژه
 COPY . /app
 
-# تنظیم ENV برای MoviePy (استفاده از system FFmpeg)
+# تنظیم ENV برای MoviePy (استفاده از system FFmpeg) و لاگ‌ها
 ENV FFMPEG_BINARY=ffmpeg
+ENV PYTHONUNBUFFERED=1
 
-# تست نصب moviepy (بهبود: تست write ساده برای چک FFmpeg)
-RUN python -c "from moviepy.editor import VideoFileClip; \
-    clip = VideoFileClip(''); clip.close(); \
-    print('MoviePy and FFmpeg installed successfully.')"
+# تست نصب moviepy (فیکس: import بدون instantiation + چک FFmpeg)
+RUN python -c "from moviepy.editor import VideoFileClip; print('MoviePy imported successfully.')" \
+    && ffmpeg -version > /dev/null 2>&1 \
+    && echo "FFmpeg OK." \
+    || (echo "FFmpeg failed!" && exit 1)
 
 # اجرای برنامه اصلی
 CMD ["python", "bot.py"]
