@@ -1,13 +1,13 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس کامل resize و pixelation)
+# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس resize method و بهبود ظاهر)
 import asyncio
 import os
 import subprocess
 import shlex
 import numpy as np  # برای np.mod و mask array
-import json  # برای json parse duration
 from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip, ColorClip
 
-# تعریف ثابت‌ها
+# تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
+# NOTE: از آنجایی که CYCLE_DURATION در هر تابع تغییر می‌کند، باید داخل توابع تعریف شود.
 T = "t"  # متغیر زمان اصلی در FFmpeg
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
@@ -107,24 +107,9 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     def process_sync():
         """تابع sync برای MoviePy (در thread جداگانه اجرا می‌شه)."""
         try:
-            # Validate input_path قبل لود (size + ffprobe duration)
+            # Validate input_path قبل لود
             if not os.path.exists(input_path) or os.path.getsize(input_path) == 0:
                 raise Exception("فایل ویدیو ناقص است.")
-            
-            # چک duration با ffprobe (json parse فیکس)
-            cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", input_path]
-            process = subprocess.run(cmd, capture_output=True, text=True)
-            if process.returncode != 0:
-                raise Exception("ffprobe fail - فایل corrupt.")
-            
-            try:
-                data = json.loads(process.stdout)
-                duration_str = data['format'].get('duration', '0')
-                duration_float = float(duration_str) if duration_str else 0
-                if duration_float == 0:
-                    raise Exception("فایل ویدیو corrupt است (duration 0).")
-            except (json.JSONDecodeError, ValueError) as parse_e:
-                raise Exception(f"Parse error in ffprobe: {str(parse_e)}")
             
             # ۱. لود ویدیو (با error handling)
             try:
@@ -134,11 +119,9 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             
             video_w, video_h = video.size
             duration = video.duration
-            fps = video.fps
             
-            # ۲. لود و تنظیم تصویر واترمارک (transparent برای PNG، resize ساده)
-            is_transparent = image_path.lower().endswith('.png')
-            wm_base = ImageClip(image_path, transparent=is_transparent).resize(height=video_h * size_percent / 100)
+            # ۲. لود و تنظیم تصویر واترمارک (فیکس: بدون method param)
+            wm_base = ImageClip(image_path).resize(height=video_h * size_percent / 100)
             wm_w, wm_h = wm_base.size
             
             # ۳. تنظیمات انیمیشن (مثل FFmpeg)
