@@ -1,4 +1,4 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با رفع کامل اشکال نحوی لوت آلفا)
+# نام فایل: helper/watermark.py (نسخه نهایی با رفع کامل اشکال نحوی با حذف نقل قول های داخلی)
 import asyncio
 import os
 import subprocess
@@ -8,7 +8,7 @@ import shlex
 T = "t" # متغیر زمان اصلی در FFmpeg
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
-    """افزودن واترمارک متنی متحرک و محوشونده به ویدیو (بدون تغییر نسبت به نسخه قبلی)."""
+    """افزودن واترمارک متنی متحرک و محوشونده به ویدیو (برای Drawtext، نقل قول ها لازمند)."""
     
     # 1. تنظیمات زمان‌بندی انیمیشن 
     MOVE_IN_DURATION = 2
@@ -24,6 +24,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
     FINAL_Y_OUT = "main_h-text_h-20" 
 
     # 3. تعریف انیمیشن (Expressionها) 
+    # توجه: برای Drawtext، این عبارات باید در نقل قول تکی باقی بمانند تا توسط فیلتر Drawtext تفسیر شوند.
     X_EXPRESSION = (
         f"if(lt({MOD_T},{MOVE_IN_DURATION}), " 
             f"({FINAL_X_PAUSE}) * {MOD_T} / {MOVE_IN_DURATION} - text_w * (1 - {MOD_T} / {MOVE_IN_DURATION}), "
@@ -93,7 +94,7 @@ async def add_text_watermark(input_path, output_path, text, position, size_perce
 # ----------------------------------------------------------------------------------
 
 async def add_image_watermark(input_path, output_path, image_path, position, size_percent):
-    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (استفاده از گزینه alpha در overlay)."""
+    """افزودن واترمارک تصویری متحرک و محوشونده به ویدیو (با حذف تمام نقل قول های داخلی)."""
     
     T = "t"
     MOVE_IN_DURATION = 2
@@ -106,7 +107,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
     FINAL_X_OUT = FINAL_X_PAUSE
     FINAL_Y_OUT = "main_h-overlay_h-20" 
 
-    # 1. عبارات X و Y (نیاز به نقل قول درونی دارند)
+    # 1. عبارات X و Y (بدون نقل قول درونی)
     X_EXPRESSION = (
         f"if(lt(mod(t,{CYCLE_DURATION}),{MOVE_IN_DURATION}), " 
             f"({FINAL_X_PAUSE}) * mod(t,{CYCLE_DURATION}) / {MOVE_IN_DURATION} - overlay_w * (1 - mod(t,{CYCLE_DURATION}) / {MOVE_IN_DURATION}), "
@@ -122,7 +123,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             f"{FINAL_Y_PAUSE} + ({FINAL_Y_OUT} - {FINAL_Y_PAUSE}) * (mod(t,{CYCLE_DURATION}) - {MOVE_IN_DURATION + PAUSE_DURATION}) / {MOVE_OUT_DURATION})"
     )
     
-    # 2. عبارت آلفا (نیاز به نقل قول درونی دارد)
+    # 2. عبارت آلفا (بدون نقل قول درونی)
     ALPHA_EXPRESSION = (
         f"if(lt(mod(t,{CYCLE_DURATION}),{MOVE_IN_DURATION}), " 
             f"mod(t,{CYCLE_DURATION}) / {MOVE_IN_DURATION}, "
@@ -137,10 +138,10 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         f"[0:v]scale=iw*sar:ih,setsar=1[v];"
         f"[1:v]scale=iw*{size_percent/100}:-1,format=yuva444p[wm];"  
         
-        # 🚨 FIX: استفاده از alpha در overlay (که از نظر نحوی بسیار قوی‌تر است) 🚨
-        f'[v][wm]overlay=x="{X_EXPRESSION}":'
-        f'y="{Y_EXPRESSION}":'
-        f'alpha="{ALPHA_EXPRESSION}":' # <-- اعمال مستقیم انیمیشن آلفا
+        # 🚨 نهایی FIX: استفاده از alpha در overlay و حذف مطلق نقل قول های داخلی 🚨
+        f'[v][wm]overlay=x={X_EXPRESSION}:'
+        f'y={Y_EXPRESSION}:'
+        f'alpha={ALPHA_EXPRESSION}:'
         f'eof_action=repeat:shortest=0:repeatlast=0[ov];' 
         f"[ov]format=yuv420p[outv]" 
     )
