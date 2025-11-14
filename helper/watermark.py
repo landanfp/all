@@ -1,13 +1,12 @@
-# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس resize method و بهبود ظاهر)
+# نام فایل: helper/watermark.py (نسخه نهایی با MoviePy - فیکس pixelated از GitHub issues #640/#2512)
 import asyncio
 import os
 import subprocess
 import shlex
 import numpy as np  # برای np.mod و mask array
-from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip, ColorClip
+from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip, ColorClip, vfx
 
 # تعریف ثابت‌ها برای جلوگیری از تکرار و اشتباه
-# NOTE: از آنجایی که CYCLE_DURATION در هر تابع تغییر می‌کند، باید داخل توابع تعریف شود.
 T = "t"  # متغیر زمان اصلی در FFmpeg
 
 async def add_text_watermark(input_path, output_path, text, position, size_percent):
@@ -119,39 +118,38 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
             
             video_w, video_h = video.size
             duration = video.duration
+            fps = video.fps  # fps رو حفظ کن
             
-            # ۲. لود و تنظیم تصویر واترمارک (فیکس: بدون method param)
-            wm_base = ImageClip(image_path).resize(height=video_h * size_percent / 100)
+            # ۲. لود و تنظیم تصویر واترمارک (transparent برای PNG، RGBA format)
+            is_transparent = image_path.lower().endswith('.png')
+            wm_base = ImageClip(image_path, transparent=is_transparent).resize(height=video_h * size_percent / 100)
+            wm_base = wm_base.set_format('RGBA')  # فیکس: RGBA برای بهتر blending (از #2512 workaround)
             wm_w, wm_h = wm_base.size
             
             # ۳. تنظیمات انیمیشن (مثل FFmpeg)
-            MOVE_IN = 2.0  # float برای safety
+            MOVE_IN = 2.0
             PAUSE = 4.0
             MOVE_OUT = 1.5
             CYCLE = MOVE_IN + PAUSE + MOVE_OUT
-            ALPHA_MAX = 0.6  # کمتر کدر برای visibility بهتر
+            ALPHA_MAX = 0.4  # فیکس: کمتر برای visible بدون glitch
             
-            # Lambda برای cycle time (با np.mod برای np.array t)
             get_cycle_time = lambda t: np.mod(t, CYCLE)
             
-            # محاسبه موقعیت پایه بر اساس position (margin کمتر برای visibility)
             pos_base = {
-                "top_right": (video_w - wm_w - 10, 10),
-                "top_center": ((video_w - wm_w) / 2, 10),
-                "top_left": (10, 10),
-                "center_right": (video_w - wm_w - 10, (video_h - wm_h) / 2),
+                "top_right": (video_w - wm_w - 5, 5),
+                "top_center": ((video_w - wm_w) / 2, 5),
+                "top_left": (5, 5),
+                "center_right": (video_w - wm_w - 5, (video_h - wm_h) / 2),
                 "center": ((video_w - wm_w) / 2, (video_h - wm_h) / 2),
-                "center_left": (10, (video_h - wm_h) / 2),
-                "bottom_right": (video_w - wm_w - 10, video_h - wm_h - 10),
-                "bottom_center": ((video_w - wm_w) / 2, video_h - wm_h - 10),
-                "bottom_left": (10, video_h - wm_h - 10)
+                "center_left": (5, (video_h - wm_h) / 2),
+                "bottom_right": (video_w - wm_w - 5, video_h - wm_h - 5),
+                "bottom_center": ((video_w - wm_w) / 2, video_h - wm_h - 5),
+                "bottom_left": (5, video_h - wm_h - 5)
             }
-            x_base, y_base = pos_base.get(position, (video_w - wm_w - 10, 10))  # default top_right
+            x_base, y_base = pos_base.get(position, (video_w - wm_w - 5, 5))
             
-            # موقعیت خروج (همیشه به پایین)
-            x_out, y_out = x_base, video_h - wm_h - 10
+            x_out, y_out = x_base, video_h - wm_h - 5
             
-            # Lambda برای x_pos (np.where برای vectorized)
             x_pos = lambda t: np.where(
                 get_cycle_time(t) < MOVE_IN,
                 x_base * (get_cycle_time(t) / MOVE_IN) - wm_w * (1 - get_cycle_time(t) / MOVE_IN),
@@ -162,14 +160,12 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 )
             )
             
-            # Lambda برای y_pos
             y_pos = lambda t: np.where(
                 get_cycle_time(t) < MOVE_IN + PAUSE,
                 y_base,
                 y_base + (y_out - y_base) * ((get_cycle_time(t) - (MOVE_IN + PAUSE)) / MOVE_OUT)
             )
             
-            # Function برای opacity scalar (0-ALPHA_MAX)
             def get_opacity(t):
                 c_t = get_cycle_time(t)
                 if c_t < MOVE_IN:
@@ -179,7 +175,6 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 else:
                     return ALPHA_MAX * (1 - ((c_t - (MOVE_IN + PAUSE)) / MOVE_OUT))
             
-            # Frame generator برای mask (uniform grayscale array 0-255)
             def mask_frame(t):
                 alpha = get_opacity(t)
                 frame = np.full((wm_h, wm_w), int(alpha * 255), dtype=np.uint8)
@@ -194,7 +189,7 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                   .set_position(lambda t: (x_pos(t), y_pos(t)))
                   .set_mask(mask_clip))
             
-            # ۵. کامپوزیت و export (medium preset + bitrate برای کیفیت بهتر)
+            # ۵. کامپوزیت و export (crf 15 + yuv444p برای کیفیت بالا/کم artifact)
             final = CompositeVideoClip([video, wm], size=video.size)
             final.write_videofile(
                 output_path,
@@ -202,11 +197,13 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
                 audio_codec='aac',
                 temp_audiofile='temp-audio.m4a',
                 remove_temp=True,
-                preset='medium',  # کیفیت بهتر، کمتر artifact
-                bitrate='2000k',  # bitrate بالاتر برای sharpness
+                preset='medium',
+                bitrate='4000k',  # فیکس: بالاتر برای sharpness
+                fps=fps,  # fps اصلی
+                ffmpeg_params=['-crf', '15', '-pix_fmt', 'yuv444p'],  # فیکس: crf پایین + yuv444p برای بهتر color/mask
                 verbose=False,
                 logger=None,
-                threads=1  # disable multiprocessing
+                threads=1
             )
             
             # بستن کلیپ‌ها برای free memory
@@ -222,5 +219,4 @@ async def add_image_watermark(input_path, output_path, image_path, position, siz
         except Exception as e:
             raise Exception(f"MoviePy error: {str(e)}")
     
-    # اجرا در thread جداگانه (چون MoviePy CPU-intensiveه)
     await asyncio.to_thread(process_sync)
