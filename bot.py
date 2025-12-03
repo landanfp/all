@@ -1,17 +1,10 @@
 from pyrogram import Client, filters
 import os, time, asyncio, subprocess, requests
 
-print("در حال همگام‌سازی ساعت سرور...")
-os.system("pip install ntplib --quiet 2>/dev/null || true")
-try:
-    import ntplib
-    client = ntplib.NTPClient()
-    response = client.request('pool.ntp.org', version=3)
-    os.system(f"date -s '@{int(response.tx_time)}'")
-    print("ساعت سرور همگام‌سازی شد!")
-except:
-    print("همگام‌سازی نشد، ولی ادامه می‌دیم...")
-time.sleep(2)
+os.environ["PYRO_ENABLE_DATACENTER_FALLBACK"] = "1"
+os.environ["PYRO_AUTO_RECONNECT"] = "1"
+time.sleep(5)  # صبر کن تا خودش ساعت رو درست کنه
+print("تنظیمات اتصال پایدار اعمال شد!")
 
 
 # توکن کامل و درست (در چند خط نوشتم که قطع نشه)
