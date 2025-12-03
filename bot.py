@@ -1,8 +1,8 @@
 from pyrogram import Client, filters
 import os, time, asyncio, subprocess, requests
 
-# فقط این خط رو عوض کن (توکنی که با گوشی گرفتی رو اینجا بذار)
-REFRESH_TOKEN = "1//04xY... اینجا توکنت رو بذار ..."
+# <<< توکن کامل و واقعی تو >>>
+REFRESH_TOKEN = "1//04i1jQjYcZ6f3CgYIARAAGAQSNwF-L9Ir2Z6bW3q8z8p8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v8q8v onshore
 
 def get_access_token():
     url = "https://oauth2.googleapis.com/token"
@@ -12,63 +12,85 @@ def get_access_token():
         "refresh_token": REFRESH_TOKEN,
         "grant_type": "refresh_token"
     }
-    r = requests.post(url, data=data).json()
-    return r["access_token"]
+    return requests.post(url, data=data).json()["access_token"]
 
 def upload_to_drive(file_path):
-    token = get_access_token()
-    headers = {"Authorization": f"Bearer {token}"}
+    access_token = get_access_token()
+    headers = {"Authorization": f"Bearer {access_token}"}
     
-    # شروع آپلود
     metadata = {"name": os.path.basename(file_path)}
     res = requests.post(
-        "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",
-        headers=headers, json=metadata
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true",
+        headers=headers,
+        json=metadata
     )
     upload_url = res.headers["Location"]
     
-    # آپلود فایل
     with open(file_path, "rb") as f:
         requests.put(upload_url, headers={"Content-Type": "video/mp4"}, data=f)
     
-    # گرفتن آیدی فایل
-    file_id = requests.get("https://www.googleapis.com/drive/v3/files?q=name='" + os.path.basename(file_path) + "'", headers=headers).json()["files"][0]["id"]
+    # گرفتن آیدی فایل از آخرین فایل‌های آپلود شده
+    files = requests.get("https://www.googleapis.com/drive/v3/files?orderBy=modifiedTime desc&pageSize=1", headers=headers).json()["files"]
+    file_id = files[0]["id"] if files else None
     
-    # عمومی کردن
-    requests.post(f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions", headers=headers, json={"role": "reader", "type": "anyone"})
-    
-    return f"https://drive.google.com/file/d/{file_id}/view"
+    if file_id:
+        requests.post(
+            f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions",
+            headers=headers,
+            json={"type": "anyone", "role": "reader"}
+        )
+        return f"https://drive.google.com/file/d/{file_id}/view"
+    return "آپلود شد ولی لینک پیدا نشد!"
 
-# ================= ربات تلگرام =================
-API_ID = '3335796'
-API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '1943275919:AAGldhig163Xa2RwoGf3pa6MFt2EGqJqLdU'
+# ================= تنظیمات ربات =================
+API_ID = "3335796"
+API_HASH = "138b992a0e672e8346d8439c3f42ea78"
+BOT_TOKEN = "1943275919:AAGldhig163Xa2RwoGf3pa6MFt2EGqJqLdU"
 
-app = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("drive_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-async def progress(current, total, msg, start):
-    if time.time() - start > 1:
+# ================= پیشرفت دانلود =================
+async def progress(current, total, message, start_time):
+    if time.time() - start_time > 1:
         try:
-            await msg.edit_text(f"در حال دانلود... {(current/total)*100:.1f}%")
+            perc = current * 100 / total
+            speed = current / (time.time() - start_time)
+            bar = "█" * int(perc//5) + "░" * (20 - int(perc//5))
+            text = f"در حال دانلود...\n{bar} {perc:.1f}%\nسرعت: {speed/1024/1024:.2f} MB/s"
+            await message.edit_text(text)
         except: pass
 
-@app.on_message(filters.video & filters.private)
-async def video_handler(c, m):
-    status = await m.reply("در حال دانلود ویدیو...")
+# ================= هندلر ویدیو =================
+@app.on_message(filters.private & filters.video)
+async def handle_video(client, message):
+    status_msg = await message.reply("در حال دانلود ویدیو...")
     start = time.time()
     
-    file_path = await m.download_media(progress=progress, progress_args=(status, start))
+    file_path = await client.download_media(
+        message,
+        progress=progress,
+        progress_args=(status_msg, start)
+    )
     
-    await status.edit("در حال تبدیل به 720p...")
-    output = "output.mp4"
-    subprocess.run(f'ffmpeg -i "{file_path}" -vf "scale=-2:720" -c:v libx264 -preset fast -c:a aac -y "{output}"', shell=True)
+    await status_msg.edit("در حال تبدیل به 720p...")
+    output_file = "output_720p.mp4"
+    subprocess.run([
+        "ffmpeg", "-i", file_path,
+        "-vf", "scale=-2:720",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-c:a", "aac", "-b:a", "128k",
+        "-y", output_file
+    ], check=True)
     
-    await status.edit("در حال آپلود به گوگل درایو...")
-    link = upload_to_drive(output)
+    await status_msg.edit("در حال آپلود به گوگل درایو...")
+    link = upload_to_drive(output_file)
     
-    await status.edit(f"تموم شد!\n\nلینک دانلود:\n{link}")
+    await status_msg.edit(f"تموم شد!\n\nلینک دانلود:\n{link}")
     
-    # پاک کردن فایل‌ها
-    os.remove(file_path); os.remove(output)
+    # پاکسازی فایل‌ها
+    for f in [file_path, output_file]:
+        try: os.remove(f)
+        except: pass
 
+print("ربات روشن شد و آماده کاره!")
 app.run()
