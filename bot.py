@@ -6,7 +6,7 @@ from pydrive.drive import GoogleDrive
 
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
-BOT_TOKEN = '7136875110:AAGr1EREy_qPMgxVbuE4B0cHGVcwWudOrus'
+BOT_TOKEN = '1943275919:AAGldhig163Xa2RwoGf3pa6MFt2EGqJqLdU'
 #LOG_CHANNEL = -1001792962793  # مقدار دلخواه
 
 app = Client("test_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
