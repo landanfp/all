@@ -9,9 +9,9 @@ import hashlib
 import asyncio
 
 # === تنظیمات تلگرام ===
-API_ID = 12345678          # <-- API_ID خودت رو بنویس
-API_HASH = "your_api_hash" # <-- API_HASH خودت رو بنویس
-BOT_TOKEN = "your:bot_token"  # <-- توکن ربات از BotFather
+API_ID = '3335796'
+API_HASH = '138b992a0e672e8346d8439c3f42ea78'
+BOT_TOKEN = '7136875110:AAGr1EREy_qPMgxVbuE4B0cHGVcwWudOrus'
 
 # === تنظیمات OK.ru ===
 ACCESS_TOKEN = "-nIMRgTZCuU2hYBWIEn0IlBkvowUXZvgoiD8RaFFtxcOYMinTvspwiNLdXVg4swGgqSW68"
@@ -23,8 +23,7 @@ SESSION_SECRET_KEY = "4ee5aa4b9721d1797c439344b9a77825"
 TEMP_DIR = "downloads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-app = Client("okru_uploader_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
+app = Client("okruuploader", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 def sign_request(params):
     param_str = ''.join([k + '=' + str(v) for k, v in sorted(params.items())])
     sig_str = param_str + SECRET_KEY
