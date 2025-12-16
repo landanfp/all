@@ -1,4 +1,3 @@
-
 # فایل: okru_telegram_bot.py
 
 import requests
@@ -9,18 +8,15 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 
 # === تنظیمات تلگرام ===
-# این مقادیر را با اطلاعات خودتان جایگزین کنید
 API_ID = '3335796'
 API_HASH = '138b992a0e672e8346d8439c3f42ea78'
 BOT_TOKEN = '7136875110:AAGr1EREy_qPMgxVbuE4B0cHGVcwWudOrus'
 
-# === تنظیمات OK.ru ===
-# این مقادیر را با اطلاعات اپلیکیشن خود در OK.ru جایگزین کنید
-ACCESS_TOKEN = "your_ok_ru_access_token"  # <-- توکن دسترسی معتبر
-APP_KEY = "your_application_public_key"  # <-- کلید عمومی اپلیکیشن (Application Key)
-SECRET_KEY = "your_application_secret_key"  # <-- کلید مخفی اپلیکیشن
-# این کلید مخفی نشست است که برای امضای درخواست‌های کاربر استفاده می‌شود
-SESSION_SECRET_KEY = "your_session_secret_key"
+# === تنظیمات OK.ru (با اطلاعات واقعی تو) ===
+ACCESS_TOKEN = "-n-ImRMgTZ9CuU2hYBW9iEJnoilBkv0wUXhZvgOi8rD8RaF39FtxOYMvinTvspwiNLdXVg4sw8Gqj36SW6o8"  # توکن جدید و معتبر
+APP_KEY = "COIOIMNGDIHBABABA"  # کلید عمومی (از ایمیل تأیید اپلیکیشن)
+SECRET_KEY = "6B885C7A402C8EC353638176"  # کلید مخفی اپلیکیشن
+SESSION_SECRET_KEY = "4ee5aa4b9721d1797c439344b9a77825"  # کلید مخفی نشست
 
 # فولدر موقت برای دانلود ویدیوها
 TEMP_DIR = "downloads"
@@ -30,17 +26,15 @@ app = Client("okru_uploader_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BO
 
 def sign_request(params):
     """
-    امضای دیجیتال درخواست را با استفاده از کلید مخفی نشست (session_secret_key) تولید می‌کند.
+    امضای دیجیتال درخواست با استفاده از SESSION_SECRET_KEY (برای توکن‌های جلسه‌ای/unlimited)
     """
     param_str = ''.join([k + '=' + str(v) for k, v in sorted(params.items())])
-    # *** تغییر اصلی اینجاست ***
-    # برای درخواست‌های دارای access_token باید از کلید مخفی نشست استفاده کرد.
     sig_str = param_str + SESSION_SECRET_KEY
     return hashlib.md5(sig_str.encode('utf-8')).hexdigest()
 
 async def get_upload_url():
     """
-    URL لازم برای آپلود ویدیو را از API سایت OK.ru دریافت می‌کند.
+    دریافت URL آپلود از OK.ru
     """
     params = {
         "application_key": APP_KEY,
@@ -51,118 +45,101 @@ async def get_upload_url():
     params["sig"] = sign_request(params)
 
     try:
-        response = requests.get("https://api.ok.ru/fb.do", params=params)
-        response.raise_for_status()  # بررسی خطاهای HTTP
+        response = requests.get("https://api.ok.ru/fb.do", params=params, timeout=30)
+        response.raise_for_status()
         data = response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"خطای شبکه در ارتباط با API: {e}")
-        return None, f"خطای شبکه: {e}"
+    except Exception as e:
+        print(f"خطای ارتباط با API OK.ru: {e}")
+        return None, f"خطای ارتباط با سرور"
 
-    # برای خطایابی: پاسخ کامل از سرور OK.ru را چاپ می‌کند
-    print(f"OK.ru API Response: {data}")
+    print(f"پاسخ API OK.ru: {data}")  # برای دیباگ
 
     if "error_code" in data:
-        error_msg = data.get("error_msg", "خطای نامشخص از API")
-        return None, error_msg
+        error_msg = data.get("error_msg", "خطای نامشخص")
+        error_code = data.get("error_code", "نامشخص")
+        return None, f"خطای API ({error_code}): {error_msg}"
 
     return data.get("upload_url"), data.get("video_id")
 
 async def upload_to_okru(file_path: str):
     """
-    فایل ویدیو را در OK.ru آپلود کرده و لینک آن را برمی‌گرداند.
+    آپلود ویدیو به OK.ru و عمومی کردن آن
     """
-    upload_url, result = await get_upload_url()
-    if not upload_url:
-        # result حاوی پیام خطا از get_upload_url است
-        return None, f"خطا در دریافت URL آپلود: {result}"
+    upload_url, video_id = await get_upload_url()
+    if not upload_url or not video_id:
+        return None, video_id  # video_id در اینجا پیام خطا است
 
-    video_id = result
+    print(f"در حال آپلود ویدیو به: {upload_url}")
     try:
         with open(file_path, "rb") as f:
-            files = {"video_file_1": f}  # نام پارامتر فایل ممکن است متفاوت باشد
-            upload_resp = requests.post(upload_url, files=files)
-            upload_resp.raise_for_status()
-            # پاسخ آپلود معمولا شامل اطلاعاتی است که باید به سرور ok.ru برگردانده شود
-            print(f"Upload response text: {upload_resp.text}")
+            files = {"file": f}  # نام فیلد درست "file" است (نه video_file_1)
+            upload_resp = requests.post(upload_url, files=files, timeout=300)  # تایم‌اوت طولانی برای آپلود
 
-    except requests.exceptions.RequestException as e:
-        return None, f"خطا در آپلود فایل: {e}"
+        if upload_resp.status_code != 200:
+            return None, f"آپلود ناموفق (کد {upload_resp.status_code})"
 
-    # پس از آپلود موفق، ممکن است نیاز به تایید آپلود باشد
-    # این بخش بسته به API ممکن است متفاوت باشد، در اینجا عمومی کردن ویدیو انجام می‌شود
+        print(f"آپلود موفق! پاسخ: {upload_resp.text}")
 
-    params = {
+    except Exception as e:
+        return None, f"خطا در ارسال فایل: {e}"
+
+    # عمومی کردن ویدیو (اختیاری اما توصیه می‌شود)
+    update_params = {
         "method": "video.update",
         "video_id": video_id,
-        "status": "PUBLIC",  # معمولا مقادیر بزرگ (UPPERCASE) هستند
+        "status": "public",  # کوچک بنویس (public نه PUBLIC)
         "access_token": ACCESS_TOKEN,
         "application_key": APP_KEY,
         "format": "json"
     }
-    params["sig"] = sign_request(params)
-    requests.get("https://api.ok.ru/fb.do", params=params)
+    update_params["sig"] = sign_request(update_params)
+    requests.get("https://api.ok.ru/fb.do", params=update_params)
 
     video_link = f"https://ok.ru/video/{video_id}"
     return video_link, video_id
 
 @app.on_message(filters.private & filters.video)
 async def handle_video(client: Client, message: Message):
-    """
-    ویدیوهای ارسالی توسط کاربر را مدیریت می‌کند.
-    """
-    progress_message = await message.reply_text("ویدیو دریافت شد! در حال آماده‌سازی برای آپلود... ⏳")
+    progress = await message.reply_text("ویدیو دریافت شد! در حال دانلود... ⏳")
 
-    # دانلود ویدیو
     try:
         file_path = await message.download(
-            file_name=f"{TEMP_DIR}/{message.video.file_unique_id}.mp4"
+            file_name=f"{TEMP_DIR}/{message.video.file_unique_id}.mp4",
+            progress=lambda d, t: asyncio.create_task(progress.edit_text(f"دانلود: {int(d/t*100)}%"))
         )
     except Exception as e:
-        await progress_message.edit_text(f"خطا در دانلود ویدیو از تلگرام: {e}")
+        await progress.edit_text(f"خطا در دانلود: {e}")
         return
 
-    await progress_message.edit_text("ویدیو دانلود شد. در حال آپلود به OK.ru... 🚀")
+    await progress.edit_text("دانلود کامل شد. در حال آپلود به OK.ru... 🚀")
 
-    # آپلود به OK.ru
     link, result = await upload_to_okru(file_path)
 
     # پاک کردن فایل موقت
-    if os.path.exists(file_path):
+    try:
         os.remove(file_path)
+    except:
+        pass
 
     if link:
-        await progress_message.edit_text(
-            f"✅ ویدیو با موفقیت در OK.ru آپلود شد! 🎉\n\n"
-            f"**لینک:** {link}\n"
-            f"**ID ویدیو:** `{result}`"
+        await progress.edit_text(
+            f"✅ **ویدیو با موفقیت آپلود شد!** 🎉\n\n"
+            f"🔗 **لینک:** {link}\n"
+            f"🆔 **ID ویدیو:** `{result}`",
+            disable_web_page_preview=True
         )
     else:
-        # result حاوی پیام خطا است
-        await progress_message.edit_text(f"❌ خطا در آپلود به OK.ru:\n\n`{result}`")
+        await progress.edit_text(f"❌ خطا در آپلود:\n\n`{result}`")
 
 @app.on_message(filters.command("start"))
 async def start(client: Client, message: Message):
-    """
-    پاسخ به دستور /start
-    """
     await message.reply_text(
-        "سلام! 👋\n"
-        "من ربات آپلود ویدیو به OK.ru هستم.\n\n"
-        "کافی است یک ویدیو برای من بفرستید تا آن را آپلود کرده و لینک را برای شما ارسال کنم. 🚀"
+        "سلام دوست عزیز! 👋\n\n"
+        "من ربات آپلود ویدیو به **OK.ru** هستم.\n\n"
+        "فقط یک ویدیو برام بفرست، من آپلود می‌کنم و لینک مستقیمش رو بهت می‌دم! 🚀\n\n"
+        "حجم ویدیو تا ۲ گیگابایت پشتیبانی می‌شه.",
+        disable_web_page_preview=True
     )
 
-async def main():
-    print("ربات در حال اجراست...")
-    await app.start()
-    await asyncio.Event().wait() # برای در حال اجرا نگه داشتن ربات
-
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(main())
-    except KeyboardInterrupt:
-        print("\nخروج از ربات...")
-    finally:
-        # ممکن است نیاز به توقف app به صورت async باشد
-        # loop.run_until_complete(app.stop())
-        pass
+print("ربات OK.ru Uploader در حال اجراست...")
+app.run()
