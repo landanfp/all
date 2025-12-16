@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # کپی کد ربات و فایل‌های تنظیمات
 COPY okru_telegram_bot.py .
-COPY .env .                  # اگر از .env استفاده می‌کنی (پیشنهاد می‌کنم)
+#COPY .env .                  # اگر از .env استفاده می‌کنی (پیشنهاد می‌کنم)
 
 # تغییر مالکیت فایل‌ها به کاربر غیرروت
 RUN chown -R appuser:appuser /app
